@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Gesture Chord – Demo</title>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background: #0d1117; color: #fff; min-height: 100vh;
+    }
+    .app { max-width: 860px; margin: auto; padding: 16px; }
+    h1 { margin: 0 0 6px; font-size: 1.45rem; }
+    .sub { color:#aeb8c4; margin-bottom: 14px; }
+    .stage {
+      position: relative; overflow: hidden; border-radius: 18px;
+      background: #05070a; aspect-ratio: 3/4; max-height: 68vh;
+      border: 1px solid #26303b;
+    }
+    video, canvas {
+      position:absolute; inset:0; width:100%; height:100%; object-fit:cover;
+      transform: scaleX(-1);
+    }
+    .hud {
+      position:absolute; left:12px; right:12px; bottom:12px;
+      display:grid; gap:8px;
+    }
+    .card {
+      background: rgba(8,12,18,.78); backdrop-filter: blur(8px);
+      border:1px solid rgba(255,255,255,.12); border-radius:14px; padding:12px;
+    }
+    .chord { font-size: 2.2rem; font-weight: 800; line-height:1; }
+    .status { color:#c8d1dc; margin-top:6px; font-size:.95rem; }
+    .controls { display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top:12px; }
+    button, select {
+      border:0; border-radius:12px; padding:13px 14px; font-size:1rem;
+      background:#1f6feb; color:white; font-weight:700;
+    }
+    select { background:#202832; }
+    button.secondary { background:#2a3440; }
+    .legend {
+      margin-top:12px; background:#151b23; border:1px solid #26303b;
+      border-radius:14px; padding:12px; color:#c7d0da; line-height:1.5;
+    }
+    .error { color:#ffb4b4; }
+    @media (min-width: 700px) {
+      .stage { aspect-ratio: 16/10; }
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+  <h1>Gesture Chord – demo basilare</h1>
+  <div class="sub">Mostra da 1 a 5 dita alla fotocamera. Il gesto stabile suona un accordo.</div>
+
+  <div class="stage">
+    <video id="video" autoplay playsinline muted></video>
+    <canvas id="canvas"></canvas>
+    <div class="hud">
+      <div class="card">
+        <div id="chord" class="chord">—</div>
+        <div id="status" class="status">Premi “Avvia fotocamera”.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button id="start">Avvia fotocamera</button>
+    <button id="stop" class="secondary">Stop suono</button>
+    <select id="key">
+      <option value="C">Tonalità: Do</option>
+      <option value="D">Tonalità: Re</option>
+      <option value="E">Tonalità: Mi</option>
+      <option value="F">Tonalità: Fa</option>
+      <option value="G">Tonalità: Sol</option>
+      <option value="A">Tonalità: La</option>
+    </select>
+    <select id="wave">
+      <option value="sine">Suono morbido</option>
+      <option value="triangle" selected>Suono synth</option>
+      <option value="square">Suono brillante</option>
+    </select>
+  </div>
+
+  <div class="legend">
+    <strong>Mappa gesti</strong><br>
+    1 dito → I maggiore · 2 dita → ii minore · 3 dita → IV maggiore ·
+    4 dita → V maggiore · 5 dita → vi minore · pugno → stop.<br>
+    Tieni il gesto fermo per circa mezzo secondo.
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+<script>
+const video = document.getElementById('video');
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const chordEl = document.getElementById('chord');
+const statusEl = document.getElementById('status');
+const keyEl = document.getElementById('key');
+const waveEl = document.getElementById('wave');
+
+let audioCtx, master, activeOsc = [];
+let lastGesture = null, stableSince = 0, playedGesture = null;
+let camera = null;
+
+const NOTE_INDEX = {C:0,'C#':1,D:2,'D#':3,E:4,F:5,'F#':6,G:7,'G#':8,A:9,'A#':10,B:11};
+const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+
+function midiToHz(m){ return 440 * Math.pow(2, (m - 69)/12); }
+
+function chordForGesture(rootName, fingers) {
+  const root = NOTE_INDEX[rootName];
+  const map = {
+    1: {deg:0, quality:'maj', label:'I'},
+    2: {deg:2, quality:'min', label:'ii'},
+    3: {deg:5, quality:'maj', label:'IV'},
+    4: {deg:7, quality:'maj', label:'V'},
+    5: {deg:9, quality:'min', label:'vi'}
+  };
+  const item = map[fingers];
+  if (!item) return null;
+  const semitone = (root + item.deg) % 12;
+  const name = NOTE_NAMES[semitone] + (item.quality === 'min' ? 'm' : '');
+  const intervals = item.quality === 'min' ? [0,3,7] : [0,4,7];
+  return { name, intervals, rootMidi: 60 + semitone };
+}
+
+function stopSound(){
+  activeOsc.forEach(o => {
+    try { o.gain.gain.cancelScheduledValues(audioCtx.currentTime);
+          o.gain.gain.setTargetAtTime(0, audioCtx.currentTime, .04);
+          o.osc.stop(audioCtx.currentTime + .2); } catch(e){}
+  });
+  activeOsc = [];
+  playedGesture = null;
+}
+
+function playChord(ch) {
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    master = audioCtx.createGain();
+    master.gain.value = 0.18;
+    master.connect(audioCtx.destination);
+  }
+  stopSound();
+  const now = audioCtx.currentTime;
+  ch.intervals.forEach((interval, i) => {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = waveEl.value;
+    osc.frequency.value = midiToHz(ch.rootMidi + interval);
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(0.22 / (i + 1), now + .05);
+    osc.connect(gain).connect(master);
+    osc.start(now);
+    activeOsc.push({osc, gain});
+  });
+}
+
+function countFingers(lm, handedness) {
+  let count = 0;
+  [[8,6],[12,10],[16,14],[20,18]].forEach(([tip,pip]) => {
+    if (lm[tip].y < lm[pip].y - 0.025) count++;
+  });
+  const isRight = handedness === 'Right';
+  const thumbOpen = isRight
+    ? lm[4].x < lm[3].x - 0.035
+    : lm[4].x > lm[3].x + 0.035;
+  if (thumbOpen) count++;
+  return count;
+}
+
+function draw(results){
+  canvas.width = video.videoWidth || 640;
+  canvas.height = video.videoHeight || 480;
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  if (!results.multiHandLandmarks?.length) {
+    statusEl.textContent = 'Nessuna mano rilevata.';
+    lastGesture = null; stableSince = 0;
+    return;
+  }
+
+  const lm = results.multiHandLandmarks[0];
+  const handed = results.multiHandedness?.[0]?.label || 'Right';
+
+  drawConnectors(ctx, lm, HAND_CONNECTIONS, {color:'#60a5fa', lineWidth:4});
+  drawLandmarks(ctx, lm, {color:'#ffffff', lineWidth:1, radius:3});
+
+  const fingers = countFingers(lm, handed);
+  const now = performance.now();
+
+  if (fingers !== lastGesture) {
+    lastGesture = fingers;
+    stableSince = now;
+    statusEl.textContent = `Gesto rilevato: ${fingers}. Tienilo fermo…`;
+    return;
+  }
+
+  const stableMs = now - stableSince;
+  if (stableMs < 450) {
+    statusEl.textContent = `Gesto ${fingers}: stabilizzazione ${Math.round(stableMs)} ms`;
+    return;
+  }
+
+  if (fingers === 0) {
+    chordEl.textContent = 'STOP';
+    statusEl.textContent = 'Pugno rilevato: suono fermato.';
+    if (playedGesture !== 0) { stopSound(); playedGesture = 0; }
+    return;
+  }
+
+  const ch = chordForGesture(keyEl.value, fingers);
+  if (!ch) return;
+
+  chordEl.textContent = ch.name;
+  statusEl.textContent = `${fingers} dita → ${ch.name}`;
+  const signature = `${keyEl.value}-${fingers}-${waveEl.value}`;
+  if (playedGesture !== signature) {
+    playChord(ch);
+    playedGesture = signature;
+  }
+}
+
+const hands = new Hands({
+  locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+});
+hands.setOptions({
+  maxNumHands: 1,
+  modelComplexity: 1,
+  minDetectionConfidence: 0.65,
+  minTrackingConfidence: 0.6
+});
+hands.onResults(draw);
+
+document.getElementById('start').addEventListener('click', async () => {
+  try {
+    if (!window.isSecureContext) throw new Error('La pagina non è aperta tramite HTTPS.');
+    if (audioCtx?.state === 'suspended') await audioCtx.resume();
+    camera = new Camera(video, {
+      onFrame: async () => { await hands.send({image: video}); },
+      width: 640, height: 480
+    });
+    await camera.start();
+    statusEl.textContent = 'Fotocamera avviata. Mostra la mano.';
+  } catch (e) {
+    statusEl.innerHTML = '<span class="error">Fotocamera non disponibile: controlla il permesso Fotocamera di Chrome e apri la demo tramite HTTPS.</span>';
+    alert('Impossibile usare la fotocamera: ' + e.message);
+    console.error(e);
+  }
+});
+
+document.getElementById('stop').addEventListener('click', stopSound);
+keyEl.addEventListener('change', () => { playedGesture = null; });
+waveEl.addEventListener('change', () => { playedGesture = null; });
+</script>
+</body>
+</html>
