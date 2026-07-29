@@ -4,89 +4,37 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
   <meta name="theme-color" content="#05070a" />
-  <title>Gesture Chord – Live</title>
+  <title>Gesture Chord – Piano</title>
   <style>
     :root { color-scheme: dark; }
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
     html, body { width:100%; height:100%; margin:0; overflow:hidden; }
-    body {
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-      background:#05070a; color:#fff; overscroll-behavior:none;
-    }
+    body { font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; background:#05070a; color:#fff; overscroll-behavior:none; }
     button, select { font:inherit; }
-    .app, .stage { position:fixed; inset:0; width:100%; height:100%; height:100dvh; }
+    .app,.stage { position:fixed; inset:0; width:100%; height:100%; height:100dvh; }
     .stage { overflow:hidden; background:#05070a; }
-    video, canvas {
-      position:absolute; inset:0; width:100%; height:100%; object-fit:cover;
-      transform:scaleX(-1);
-    }
-    .shade {
-      position:absolute; inset:0; pointer-events:none;
-      background:linear-gradient(to bottom,rgba(0,0,0,.55),transparent 25%,transparent 72%,rgba(0,0,0,.32));
-    }
-    .topbar {
-      position:absolute; top:max(10px,env(safe-area-inset-top)); left:10px; right:10px;
-      display:flex; align-items:flex-start; justify-content:space-between; gap:8px;
-      z-index:3;
-    }
-    select, .small-btn {
-      min-height:44px; border:1px solid rgba(255,255,255,.18); border-radius:13px;
-      padding:0 12px; background:rgba(8,12,18,.72); color:#fff;
-      backdrop-filter:blur(9px); font-weight:750; font-size:.95rem;
-    }
+    video,canvas { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; transform:scaleX(-1); }
+    .shade { position:absolute; inset:0; pointer-events:none; background:linear-gradient(to bottom,rgba(0,0,0,.55),transparent 25%,transparent 72%,rgba(0,0,0,.32)); }
+    .topbar { position:absolute; top:max(10px,env(safe-area-inset-top)); left:10px; right:10px; display:flex; align-items:flex-start; justify-content:space-between; gap:8px; z-index:3; }
+    select,.small-btn { min-height:44px; border:1px solid rgba(255,255,255,.18); border-radius:13px; padding:0 12px; background:rgba(8,12,18,.72); color:#fff; backdrop-filter:blur(9px); font-weight:750; font-size:.95rem; }
     .small-btn { min-width:46px; cursor:pointer; touch-action:manipulation; }
-    .readout {
-      position:absolute; top:max(70px,calc(env(safe-area-inset-top) + 62px));
-      left:50%; transform:translateX(-50%); text-align:center; pointer-events:none;
-      width:min(92vw,460px); z-index:2;
-    }
-    .chord {
-      display:inline-block; min-width:128px; padding:10px 22px 12px;
-      border-radius:20px; background:rgba(8,12,18,.68);
-      border:1px solid rgba(255,255,255,.14); backdrop-filter:blur(9px);
-      font-size:clamp(3.4rem,18vw,6.5rem); font-weight:900; line-height:1;
-      text-shadow:0 3px 18px rgba(0,0,0,.5);
-    }
-    .status {
-      margin-top:7px; font-size:.92rem; color:#e5edf6;
-      text-shadow:0 2px 6px #000;
-    }
-    .quality {
-      position:absolute;
-      left:max(8px,env(safe-area-inset-left));
-      top:52%; transform:translateY(-50%);
-      width:min(112px,30vw);
-      display:grid; grid-template-columns:1fr; gap:10px;
-      z-index:4;
-    }
-    .quality-btn {
-      min-height:86px; padding:8px 5px;
-      border:2px solid rgba(255,255,255,.22); border-radius:18px;
-      background:rgba(20,27,36,.82); color:#fff; backdrop-filter:blur(10px);
-      font-size:clamp(.84rem,3.7vw,1.06rem); font-weight:900;
-      cursor:pointer; touch-action:manipulation; user-select:none;
-      box-shadow:0 8px 22px rgba(0,0,0,.28);
-    }
-    .quality-btn.active {
-      background:#1f6feb; border-color:#a5ccff;
-      box-shadow:0 0 0 3px rgba(31,111,235,.25),0 8px 24px rgba(0,0,0,.4);
-    }
+    .readout { position:absolute; top:max(70px,calc(env(safe-area-inset-top) + 62px)); left:50%; transform:translateX(-50%); text-align:center; pointer-events:none; width:min(92vw,460px); z-index:2; }
+    .chord { display:inline-block; min-width:128px; padding:10px 22px 12px; border-radius:20px; background:rgba(8,12,18,.68); border:1px solid rgba(255,255,255,.14); backdrop-filter:blur(9px); font-size:clamp(3.4rem,18vw,6.5rem); font-weight:900; line-height:1; text-shadow:0 3px 18px rgba(0,0,0,.5); }
+    .status { margin-top:7px; font-size:.92rem; color:#e5edf6; text-shadow:0 2px 6px #000; }
+    .quality { position:absolute; left:max(8px,env(safe-area-inset-left)); top:52%; transform:translateY(-50%); width:min(112px,30vw); display:grid; grid-template-columns:1fr; gap:10px; z-index:4; }
+    .quality-btn { min-height:86px; padding:8px 5px; border:2px solid rgba(255,255,255,.22); border-radius:18px; background:rgba(20,27,36,.82); color:#fff; backdrop-filter:blur(10px); font-size:clamp(.84rem,3.7vw,1.06rem); font-weight:900; cursor:pointer; touch-action:manipulation; user-select:none; box-shadow:0 8px 22px rgba(0,0,0,.28); }
+    .quality-btn.active { background:#1f6feb; border-color:#a5ccff; box-shadow:0 0 0 3px rgba(31,111,235,.25),0 8px 24px rgba(0,0,0,.4); }
     .quality-btn:active { transform:scale(.97); }
     .quality-btn small { display:block; margin-top:3px; opacity:.8; font-size:.7rem; }
-    .start-screen {
-      position:absolute; inset:0; display:grid; place-items:center; padding:24px;
-      background:radial-gradient(circle at center,#172336 0,#080c12 65%,#05070a 100%);
-      z-index:10;
-    }
+    .start-screen { position:absolute; inset:0; display:grid; place-items:center; padding:24px; background:radial-gradient(circle at center,#172336 0,#080c12 65%,#05070a 100%); z-index:10; }
     .start-card { width:min(92vw,430px); text-align:center; }
     .start-card h1 { margin:0 0 8px; font-size:1.8rem; }
     .start-card p { margin:0 0 20px; color:#c5cfda; line-height:1.45; }
-    .start-btn {
-      width:100%; min-height:62px; border:0; border-radius:17px; background:#1f6feb;
-      color:#fff; font-size:1.12rem; font-weight:850; cursor:pointer;
-    }
-    .error { color:#ffb4b4; }
-    .hidden { display:none !important; }
+    .start-btn { width:100%; min-height:62px; border:0; border-radius:17px; background:#1f6feb; color:#fff; font-size:1.12rem; font-weight:850; cursor:pointer; }
+    .start-btn:disabled { opacity:.7; }
+    .loading { min-height:24px; margin-top:12px!important; font-size:.9rem; }
+    .error { color:#ffb4b4!important; }
+    .hidden { display:none!important; }
   </style>
 </head>
 <body>
@@ -123,10 +71,10 @@
 
     <div id="startScreen" class="start-screen">
       <div class="start-card">
-        <h1>Gesture Chord</h1>
-        <p>1–5 dita selezionano Do, Re, Mi, Fa, Sol. Gli accordi suonano nel primo rivolto.</p>
-        <button id="start" class="start-btn">Avvia fotocamera</button>
-        <p id="startError" class="error" style="margin-top:12px"></p>
+        <h1>Gesture Piano</h1>
+        <p>Ora usa campioni reali di pianoforte a coda. Il primo caricamento può richiedere qualche secondo.</p>
+        <button id="start" class="start-btn">Avvia pianoforte e fotocamera</button>
+        <p id="loadStatus" class="loading">Preparazione del pianoforte…</p>
       </div>
     </div>
   </div>
@@ -135,232 +83,165 @@
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tone@14.8.49/build/Tone.js"></script>
 <script>
 const video = document.getElementById('video');
 const canvas = document.getElementById('canvas');
-const ctx = canvas.getContext('2d', { alpha:true });
+const ctx = canvas.getContext('2d',{alpha:true});
 const chordEl = document.getElementById('chord');
 const statusEl = document.getElementById('status');
 const keyEl = document.getElementById('key');
 const majorBtn = document.getElementById('major');
 const minorBtn = document.getElementById('minor');
 const startScreen = document.getElementById('startScreen');
-const startError = document.getElementById('startError');
+const loadStatus = document.getElementById('loadStatus');
 
 const STABILITY_MS = 90;
-let audioCtx, master, voices = [];
-let candidateGesture = null, candidateSince = 0;
-let currentFingers = null, playedSignature = null;
-let selectedQuality = 'maj';
-let camera = null;
+let candidateGesture=null,candidateSince=0,currentFingers=null,playedSignature=null;
+let selectedQuality='maj',camera=null,pianoReady=false;
 
-const NOTE_INDEX = {C:0,'C#':1,D:2,'D#':3,E:4,F:5,'F#':6,G:7,'G#':8,A:9,'A#':10,B:11};
-const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
-// Gradi consecutivi della scala maggiore: 1=C, 2=D, 3=E, 4=F, 5=G in tonalità di Do.
-const DEGREE_MAP = {1:0, 2:2, 3:4, 4:5, 5:7};
+const NOTE_INDEX={C:0,'C#':1,D:2,'D#':3,E:4,F:5,'F#':6,G:7,'G#':8,A:9,'A#':10,B:11};
+const NOTE_NAMES=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+const DEGREE_MAP={1:0,2:2,3:4,4:5,5:7};
 
-function midiToHz(m){ return 440 * Math.pow(2, (m - 69) / 12); }
+function midiToNote(midi){ return NOTE_NAMES[midi%12]+(Math.floor(midi/12)-1); }
 
-function chordForGesture(keyName, fingers, quality) {
-  const degreeOffset = DEGREE_MAP[fingers];
-  if (degreeOffset === undefined) return null;
-
-  // La fondamentale parte dal Do centrale (MIDI 60) e sale senza ripiegare l'ottava.
-  const rootMidi = 60 + NOTE_INDEX[keyName] + degreeOffset;
-  const rootName = NOTE_NAMES[rootMidi % 12];
-  const isMinor = quality === 'min';
-
-  // Primo rivolto: terza, quinta, fondamentale all'ottava superiore.
-  const intervals = isMinor ? [3,7,12] : [4,7,12];
+function chordForGesture(keyName,fingers,quality){
+  const degreeOffset=DEGREE_MAP[fingers];
+  if(degreeOffset===undefined)return null;
+  const rootMidi=60+NOTE_INDEX[keyName]+degreeOffset;
+  const isMinor=quality==='min';
+  const intervals=isMinor?[3,7,12]:[4,7,12];
   return {
-    name: rootName + (isMinor ? 'm' : ''),
-    intervals,
-    rootMidi
+    name:NOTE_NAMES[rootMidi%12]+(isMinor?'m':''),
+    notes:intervals.map(interval=>midiToNote(rootMidi+interval))
   };
 }
 
-function ensureAudio() {
-  if (audioCtx) return;
-  const AudioCtor = window.AudioContext || window.webkitAudioContext;
-  try { audioCtx = new AudioCtor({ latencyHint:'interactive' }); }
-  catch (_) { audioCtx = new AudioCtor(); }
+const pianoReverb=new Tone.Reverb({decay:1.8,preDelay:0.01,wet:0.13}).toDestination();
+const pianoCompressor=new Tone.Compressor({threshold:-18,ratio:2.5,attack:0.003,release:0.2}).connect(pianoReverb);
+const piano=new Tone.Sampler({
+  urls:{
+    C4:'C4.mp3','D#4':'Ds4.mp3','F#4':'Fs4.mp3',A4:'A4.mp3',
+    C5:'C5.mp3','D#5':'Ds5.mp3','F#5':'Fs5.mp3',A5:'A5.mp3',
+    C6:'C6.mp3','D#6':'Ds6.mp3','F#6':'Fs6.mp3'
+  },
+  release:1.7,
+  baseUrl:'https://tonejs.github.io/audio/salamander/'
+}).connect(pianoCompressor);
 
-  master = audioCtx.createGain();
-  master.gain.value = 0.22;
-  master.connect(audioCtx.destination);
+Tone.Destination.volume.value=-4;
+Tone.loaded().then(()=>{
+  pianoReady=true;
+  loadStatus.textContent='Pianoforte pronto';
+}).catch(()=>{
+  loadStatus.textContent='Errore nel caricamento del pianoforte';
+  loadStatus.classList.add('error');
+});
 
-  // Oscillatori persistenti: non vengono ricreati a ogni accordo, quindi la risposta è più pronta.
-  voices = [0,1,2].map(() => {
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.type = 'triangle';
-    gain.gain.value = 0.0001;
-    osc.connect(gain).connect(master);
-    osc.start();
-    return {osc, gain};
-  });
-}
-
-function stopSound(resetSignature = true) {
-  if (audioCtx) {
-    const now = audioCtx.currentTime;
-    voices.forEach(({gain}) => {
-      gain.gain.cancelScheduledValues(now);
-      gain.gain.setTargetAtTime(0.0001, now, .008);
-    });
-  }
-  if (resetSignature) playedSignature = null;
-}
-
-function playChord(ch) {
-  ensureAudio();
-  const now = audioCtx.currentTime;
-  ch.intervals.forEach((interval, i) => {
-    const voice = voices[i];
-    const target = midiToHz(ch.rootMidi + interval);
-    voice.osc.frequency.cancelScheduledValues(now);
-    voice.osc.frequency.setValueAtTime(target, now);
-    voice.gain.gain.cancelScheduledValues(now);
-    voice.gain.gain.setValueAtTime(Math.max(voice.gain.gain.value, 0.0001), now);
-    voice.gain.gain.exponentialRampToValueAtTime(0.16 / (1 + i * .18), now + .005);
-  });
-}
-
-function triggerCurrentChord(force = false) {
-  if (!currentFingers || currentFingers < 1) return;
-  const ch = chordForGesture(keyEl.value, currentFingers, selectedQuality);
-  if (!ch) return;
-
-  const signature = `${keyEl.value}-${currentFingers}-${selectedQuality}`;
-  chordEl.textContent = ch.name;
-  statusEl.textContent = `${currentFingers} dita · ${selectedQuality === 'min' ? 'minore' : 'maggiore'} · 1° rivolto`;
-
-  if (force || playedSignature !== signature) {
-    playChord(ch);
-    playedSignature = signature;
+async function ensurePiano(){
+  await Tone.start();
+  Tone.getContext().lookAhead=0.01;
+  if(!pianoReady){
+    loadStatus.textContent='Caricamento campioni di pianoforte…';
+    await Tone.loaded();
+    pianoReady=true;
   }
 }
 
-function selectQuality(quality) {
-  selectedQuality = quality;
-  majorBtn.classList.toggle('active', quality === 'maj');
-  minorBtn.classList.toggle('active', quality === 'min');
+function stopSound(resetSignature=true){
+  if(pianoReady){
+    try{ piano.releaseAll(Tone.now()); }catch(_){}
+  }
+  if(resetSignature)playedSignature=null;
+}
+
+function playChord(ch){
+  if(!pianoReady)return;
+  const now=Tone.now();
+  piano.releaseAll(now);
+  ch.notes.forEach((note,i)=>piano.triggerAttackRelease(note,2.4,now,0.82-(i*.04)));
+}
+
+function triggerCurrentChord(force=false){
+  if(!currentFingers||currentFingers<1)return;
+  const ch=chordForGesture(keyEl.value,currentFingers,selectedQuality);
+  if(!ch)return;
+  const signature=`${keyEl.value}-${currentFingers}-${selectedQuality}`;
+  chordEl.textContent=ch.name;
+  statusEl.textContent=`${currentFingers} dita · ${selectedQuality==='min'?'minore':'maggiore'} · pianoforte a coda`;
+  if(force||playedSignature!==signature){ playChord(ch); playedSignature=signature; }
+}
+
+function selectQuality(quality){
+  selectedQuality=quality;
+  majorBtn.classList.toggle('active',quality==='maj');
+  minorBtn.classList.toggle('active',quality==='min');
   triggerCurrentChord(true);
 }
 
-function countFingers(lm, handedness) {
-  let count = 0;
-  [[8,6],[12,10],[16,14],[20,18]].forEach(([tip,pip]) => {
-    if (lm[tip].y < lm[pip].y - 0.022) count++;
-  });
-  const isRight = handedness === 'Right';
-  const thumbOpen = isRight
-    ? lm[4].x < lm[3].x - 0.032
-    : lm[4].x > lm[3].x + 0.032;
-  if (thumbOpen) count++;
+function countFingers(lm,handedness){
+  let count=0;
+  [[8,6],[12,10],[16,14],[20,18]].forEach(([tip,pip])=>{ if(lm[tip].y<lm[pip].y-0.022)count++; });
+  const isRight=handedness==='Right';
+  const thumbOpen=isRight?lm[4].x<lm[3].x-0.032:lm[4].x>lm[3].x+0.032;
+  if(thumbOpen)count++;
   return count;
 }
 
-function draw(results) {
-  const width = video.videoWidth || 480;
-  const height = video.videoHeight || 360;
-  if (canvas.width !== width || canvas.height !== height) {
-    canvas.width = width;
-    canvas.height = height;
-  }
+function draw(results){
+  const width=video.videoWidth||480,height=video.videoHeight||360;
+  if(canvas.width!==width||canvas.height!==height){canvas.width=width;canvas.height=height;}
   ctx.clearRect(0,0,width,height);
-
-  if (!results.multiHandLandmarks?.length) {
-    statusEl.textContent = 'Mostra una mano alla fotocamera';
-    candidateGesture = null;
-    candidateSince = 0;
-    return;
-  }
-
-  const lm = results.multiHandLandmarks[0];
-  const handedness = results.multiHandedness?.[0]?.label || 'Right';
-  drawConnectors(ctx, lm, HAND_CONNECTIONS, {color:'#68a8ff', lineWidth:3});
-  drawLandmarks(ctx, lm, {color:'#ffffff', lineWidth:1, radius:2});
-
-  const fingers = countFingers(lm, handedness);
-  const now = performance.now();
-
-  if (fingers !== candidateGesture) {
-    candidateGesture = fingers;
-    candidateSince = now;
-    return;
-  }
-
-  if (now - candidateSince < STABILITY_MS || fingers === currentFingers) return;
-  currentFingers = fingers;
-
-  if (fingers === 0) {
-    chordEl.textContent = 'STOP';
-    statusEl.textContent = 'Pugno rilevato';
-    stopSound();
-    playedSignature = 'stop';
-    return;
-  }
-
+  if(!results.multiHandLandmarks?.length){statusEl.textContent='Mostra una mano alla fotocamera';candidateGesture=null;candidateSince=0;return;}
+  const lm=results.multiHandLandmarks[0];
+  const handedness=results.multiHandedness?.[0]?.label||'Right';
+  drawConnectors(ctx,lm,HAND_CONNECTIONS,{color:'#68a8ff',lineWidth:3});
+  drawLandmarks(ctx,lm,{color:'#fff',lineWidth:1,radius:2});
+  const fingers=countFingers(lm,handedness),now=performance.now();
+  if(fingers!==candidateGesture){candidateGesture=fingers;candidateSince=now;return;}
+  if(now-candidateSince<STABILITY_MS||fingers===currentFingers)return;
+  currentFingers=fingers;
+  if(fingers===0){chordEl.textContent='STOP';statusEl.textContent='Pugno rilevato';stopSound();playedSignature='stop';return;}
   triggerCurrentChord();
 }
 
-const hands = new Hands({
-  locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
-});
-hands.setOptions({
-  maxNumHands:1,
-  modelComplexity:0,
-  minDetectionConfidence:0.55,
-  minTrackingConfidence:0.5
-});
+const hands=new Hands({locateFile:file=>`https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
+hands.setOptions({maxNumHands:1,modelComplexity:0,minDetectionConfidence:0.55,minTrackingConfidence:0.5});
 hands.onResults(draw);
 
-async function enterFullscreen() {
-  try {
-    if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
-      await document.documentElement.requestFullscreen();
-    }
-  } catch (_) {}
+async function enterFullscreen(){
+  try{if(!document.fullscreenElement&&document.documentElement.requestFullscreen)await document.documentElement.requestFullscreen();}catch(_){}
 }
 
-document.getElementById('start').addEventListener('click', async () => {
-  const startBtn = document.getElementById('start');
-  startError.textContent = '';
-  startBtn.disabled = true;
-  startBtn.textContent = 'Avvio…';
-  try {
-    if (!window.isSecureContext) throw new Error('La pagina deve essere aperta tramite HTTPS.');
-    ensureAudio();
-    if (audioCtx.state === 'suspended') await audioCtx.resume();
+document.getElementById('start').addEventListener('click',async()=>{
+  const startBtn=document.getElementById('start');
+  loadStatus.classList.remove('error');
+  startBtn.disabled=true;
+  startBtn.textContent='Caricamento…';
+  try{
+    if(!window.isSecureContext)throw new Error('La pagina deve essere aperta tramite HTTPS.');
+    await ensurePiano();
+    loadStatus.textContent='Pianoforte pronto · avvio fotocamera…';
     await enterFullscreen();
-    camera = new Camera(video, {
-      onFrame: async () => { await hands.send({image:video}); },
-      width:480,
-      height:360,
-      facingMode:'user'
-    });
+    camera=new Camera(video,{onFrame:async()=>{await hands.send({image:video});},width:480,height:360,facingMode:'user'});
     await camera.start();
     startScreen.classList.add('hidden');
-    statusEl.textContent = 'Mostra da 1 a 5 dita';
-  } catch (e) {
-    startBtn.disabled = false;
-    startBtn.textContent = 'Riprova fotocamera';
-    startError.textContent = 'Errore: ' + e.message;
+    statusEl.textContent='Mostra da 1 a 5 dita';
+  }catch(e){
+    startBtn.disabled=false;
+    startBtn.textContent='Riprova';
+    loadStatus.textContent='Errore: '+e.message;
+    loadStatus.classList.add('error');
     console.error(e);
   }
 });
 
-document.getElementById('stop').addEventListener('pointerdown', (e) => {
-  e.preventDefault();
-  stopSound();
-  chordEl.textContent = 'STOP';
-  statusEl.textContent = 'Suono fermato manualmente';
-});
-document.getElementById('fullscreen').addEventListener('click', enterFullscreen);
-majorBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); selectQuality('maj'); });
-minorBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); selectQuality('min'); });
-keyEl.addEventListener('change', () => triggerCurrentChord(true));
+document.getElementById('stop').addEventListener('pointerdown',e=>{e.preventDefault();stopSound();chordEl.textContent='STOP';statusEl.textContent='Suono fermato manualmente';});
+document.getElementById('fullscreen').addEventListener('click',enterFullscreen);
+majorBtn.addEventListener('pointerdown',e=>{e.preventDefault();selectQuality('maj');});
+minorBtn.addEventListener('pointerdown',e=>{e.preventDefault();selectQuality('min');});
+keyEl.addEventListener('change',()=>triggerCurrentChord(true));
 </script>
 </body>
 </html>
