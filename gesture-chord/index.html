@@ -2,93 +2,124 @@
 <html lang="it">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <title>Gesture Chord – Demo</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+  <meta name="theme-color" content="#05070a" />
+  <title>Gesture Chord – Live</title>
   <style>
     :root { color-scheme: dark; }
-    * { box-sizing: border-box; }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { width:100%; height:100%; margin:0; overflow:hidden; }
     body {
-      margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-      background: #0d1117; color: #fff; min-height: 100vh;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background:#05070a; color:#fff; overscroll-behavior:none;
     }
-    .app { max-width: 860px; margin: auto; padding: 16px; }
-    h1 { margin: 0 0 6px; font-size: 1.45rem; }
-    .sub { color:#aeb8c4; margin-bottom: 14px; }
-    .stage {
-      position: relative; overflow: hidden; border-radius: 18px;
-      background: #05070a; aspect-ratio: 3/4; max-height: 68vh;
-      border: 1px solid #26303b;
-    }
+    .app, .stage { position:fixed; inset:0; width:100%; height:100%; height:100dvh; }
+    .stage { overflow:hidden; background:#05070a; }
     video, canvas {
       position:absolute; inset:0; width:100%; height:100%; object-fit:cover;
-      transform: scaleX(-1);
+      transform:scaleX(-1);
     }
-    .hud {
-      position:absolute; left:12px; right:12px; bottom:12px;
-      display:grid; gap:8px;
+    .shade {
+      position:absolute; inset:0; pointer-events:none;
+      background:linear-gradient(to bottom,rgba(0,0,0,.55),transparent 25%,transparent 62%,rgba(0,0,0,.72));
     }
-    .card {
-      background: rgba(8,12,18,.78); backdrop-filter: blur(8px);
-      border:1px solid rgba(255,255,255,.12); border-radius:14px; padding:12px;
+    .topbar {
+      position:absolute; top:max(10px,env(safe-area-inset-top)); left:10px; right:10px;
+      display:flex; align-items:flex-start; justify-content:space-between; gap:8px;
     }
-    .chord { font-size: 2.2rem; font-weight: 800; line-height:1; }
-    .status { color:#c8d1dc; margin-top:6px; font-size:.95rem; }
-    .controls { display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top:12px; }
-    button, select {
-      border:0; border-radius:12px; padding:13px 14px; font-size:1rem;
-      background:#1f6feb; color:white; font-weight:700;
+    select, .small-btn {
+      min-height:44px; border:1px solid rgba(255,255,255,.18); border-radius:13px;
+      padding:0 12px; background:rgba(8,12,18,.72); color:#fff;
+      backdrop-filter:blur(9px); font-weight:700; font-size:.95rem;
     }
-    select { background:#202832; }
-    button.secondary { background:#2a3440; }
-    .legend {
-      margin-top:12px; background:#151b23; border:1px solid #26303b;
-      border-radius:14px; padding:12px; color:#c7d0da; line-height:1.5;
+    .small-btn { min-width:46px; cursor:pointer; }
+    .readout {
+      position:absolute; top:max(70px,calc(env(safe-area-inset-top) + 62px));
+      left:50%; transform:translateX(-50%); text-align:center; pointer-events:none;
+      width:min(92vw,460px);
+    }
+    .chord {
+      display:inline-block; min-width:128px; padding:10px 22px 12px;
+      border-radius:20px; background:rgba(8,12,18,.68);
+      border:1px solid rgba(255,255,255,.14); backdrop-filter:blur(9px);
+      font-size:clamp(3.4rem,18vw,6.5rem); font-weight:900; line-height:1;
+      text-shadow:0 3px 18px rgba(0,0,0,.5);
+    }
+    .status {
+      margin-top:7px; font-size:.92rem; color:#e5edf6;
+      text-shadow:0 2px 6px #000;
+    }
+    .quality {
+      position:absolute; left:12px; right:12px;
+      bottom:max(14px,env(safe-area-inset-bottom)); display:grid;
+      grid-template-columns:1fr 1fr; gap:10px;
+    }
+    .quality-btn {
+      height:74px; border:2px solid rgba(255,255,255,.18); border-radius:19px;
+      background:rgba(20,27,36,.78); color:#fff; backdrop-filter:blur(10px);
+      font-size:1.18rem; font-weight:850; cursor:pointer; touch-action:manipulation;
+    }
+    .quality-btn.active {
+      background:#1f6feb; border-color:#8bbcff;
+      box-shadow:0 0 0 3px rgba(31,111,235,.23), 0 8px 24px rgba(0,0,0,.35);
+    }
+    .quality-btn:active { transform:scale(.985); }
+    .start-screen {
+      position:absolute; inset:0; display:grid; place-items:center; padding:24px;
+      background:radial-gradient(circle at center,#172336 0,#080c12 65%,#05070a 100%);
+      z-index:5;
+    }
+    .start-card { width:min(92vw,430px); text-align:center; }
+    .start-card h1 { margin:0 0 8px; font-size:1.8rem; }
+    .start-card p { margin:0 0 20px; color:#c5cfda; line-height:1.45; }
+    .start-btn {
+      width:100%; min-height:62px; border:0; border-radius:17px; background:#1f6feb;
+      color:#fff; font-size:1.12rem; font-weight:850; cursor:pointer;
     }
     .error { color:#ffb4b4; }
-    @media (min-width: 700px) {
-      .stage { aspect-ratio: 16/10; }
-    }
+    .hidden { display:none !important; }
   </style>
 </head>
 <body>
 <div class="app">
-  <h1>Gesture Chord – demo basilare</h1>
-  <div class="sub">Mostra da 1 a 5 dita alla fotocamera. Il gesto stabile suona un accordo.</div>
-
-  <div class="stage">
+  <div class="stage" id="stage">
     <video id="video" autoplay playsinline muted></video>
     <canvas id="canvas"></canvas>
-    <div class="hud">
-      <div class="card">
-        <div id="chord" class="chord">—</div>
-        <div id="status" class="status">Premi “Avvia fotocamera”.</div>
+    <div class="shade"></div>
+
+    <div class="topbar">
+      <select id="key" aria-label="Tonalità">
+        <option value="C">Tonalità: Do</option>
+        <option value="D">Tonalità: Re</option>
+        <option value="E">Tonalità: Mi</option>
+        <option value="F">Tonalità: Fa</option>
+        <option value="G">Tonalità: Sol</option>
+        <option value="A">Tonalità: La</option>
+      </select>
+      <div>
+        <button id="stop" class="small-btn" aria-label="Ferma il suono">■</button>
+        <button id="fullscreen" class="small-btn" aria-label="Schermo intero">⛶</button>
       </div>
     </div>
-  </div>
 
-  <div class="controls">
-    <button id="start">Avvia fotocamera</button>
-    <button id="stop" class="secondary">Stop suono</button>
-    <select id="key">
-      <option value="C">Tonalità: Do</option>
-      <option value="D">Tonalità: Re</option>
-      <option value="E">Tonalità: Mi</option>
-      <option value="F">Tonalità: Fa</option>
-      <option value="G">Tonalità: Sol</option>
-      <option value="A">Tonalità: La</option>
-    </select>
-    <select id="wave">
-      <option value="sine">Suono morbido</option>
-      <option value="triangle" selected>Suono synth</option>
-      <option value="square">Suono brillante</option>
-    </select>
-  </div>
+    <div class="readout">
+      <div id="chord" class="chord">—</div>
+      <div id="status" class="status">In attesa della fotocamera</div>
+    </div>
 
-  <div class="legend">
-    <strong>Mappa gesti</strong><br>
-    1 dito → I maggiore · 2 dita → ii minore · 3 dita → IV maggiore ·
-    4 dita → V maggiore · 5 dita → vi minore · pugno → stop.<br>
-    Tieni il gesto fermo per circa mezzo secondo.
+    <div class="quality">
+      <button id="major" class="quality-btn active">MAGGIORE</button>
+      <button id="minor" class="quality-btn">MINORE</button>
+    </div>
+
+    <div id="startScreen" class="start-screen">
+      <div class="start-card">
+        <h1>Gesture Chord</h1>
+        <p>Versione rapida: schermo intero, risposta più immediata e scelta manuale maggiore/minore.</p>
+        <button id="start" class="start-btn">Avvia fotocamera</button>
+        <p id="startError" class="error" style="margin-top:12px"></p>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -98,166 +129,214 @@
 <script>
 const video = document.getElementById('video');
 const canvas = document.getElementById('canvas');
-const ctx = canvas.getContext('2d');
+const ctx = canvas.getContext('2d', { alpha:true });
 const chordEl = document.getElementById('chord');
 const statusEl = document.getElementById('status');
 const keyEl = document.getElementById('key');
-const waveEl = document.getElementById('wave');
+const majorBtn = document.getElementById('major');
+const minorBtn = document.getElementById('minor');
+const startScreen = document.getElementById('startScreen');
+const startError = document.getElementById('startError');
 
+const STABILITY_MS = 120;
 let audioCtx, master, activeOsc = [];
-let lastGesture = null, stableSince = 0, playedGesture = null;
+let candidateGesture = null, candidateSince = 0;
+let currentFingers = null, playedSignature = null;
+let selectedQuality = 'maj';
 let camera = null;
 
 const NOTE_INDEX = {C:0,'C#':1,D:2,'D#':3,E:4,F:5,'F#':6,G:7,'G#':8,A:9,'A#':10,B:11};
 const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+const DEGREE_MAP = {1:0, 2:2, 3:5, 4:7, 5:9};
 
-function midiToHz(m){ return 440 * Math.pow(2, (m - 69)/12); }
+function midiToHz(m){ return 440 * Math.pow(2, (m - 69) / 12); }
 
-function chordForGesture(rootName, fingers) {
-  const root = NOTE_INDEX[rootName];
-  const map = {
-    1: {deg:0, quality:'maj', label:'I'},
-    2: {deg:2, quality:'min', label:'ii'},
-    3: {deg:5, quality:'maj', label:'IV'},
-    4: {deg:7, quality:'maj', label:'V'},
-    5: {deg:9, quality:'min', label:'vi'}
+function chordForGesture(rootName, fingers, quality) {
+  const degree = DEGREE_MAP[fingers];
+  if (degree === undefined) return null;
+  const semitone = (NOTE_INDEX[rootName] + degree) % 12;
+  const isMinor = quality === 'min';
+  return {
+    name: NOTE_NAMES[semitone] + (isMinor ? 'm' : ''),
+    intervals: isMinor ? [0,3,7] : [0,4,7],
+    rootMidi: 60 + semitone
   };
-  const item = map[fingers];
-  if (!item) return null;
-  const semitone = (root + item.deg) % 12;
-  const name = NOTE_NAMES[semitone] + (item.quality === 'min' ? 'm' : '');
-  const intervals = item.quality === 'min' ? [0,3,7] : [0,4,7];
-  return { name, intervals, rootMidi: 60 + semitone };
 }
 
-function stopSound(){
-  activeOsc.forEach(o => {
-    try { o.gain.gain.cancelScheduledValues(audioCtx.currentTime);
-          o.gain.gain.setTargetAtTime(0, audioCtx.currentTime, .04);
-          o.osc.stop(audioCtx.currentTime + .2); } catch(e){}
-  });
+function ensureAudio() {
+  if (audioCtx) return;
+  const AudioCtor = window.AudioContext || window.webkitAudioContext;
+  try { audioCtx = new AudioCtor({ latencyHint:'interactive' }); }
+  catch (_) { audioCtx = new AudioCtor(); }
+  master = audioCtx.createGain();
+  master.gain.value = 0.2;
+  master.connect(audioCtx.destination);
+}
+
+function stopSound(resetSignature = true) {
+  if (audioCtx) {
+    const now = audioCtx.currentTime;
+    activeOsc.forEach(({osc,gain}) => {
+      try {
+        gain.gain.cancelScheduledValues(now);
+        gain.gain.setTargetAtTime(0, now, .012);
+        osc.stop(now + .07);
+      } catch (_) {}
+    });
+  }
   activeOsc = [];
-  playedGesture = null;
+  if (resetSignature) playedSignature = null;
 }
 
 function playChord(ch) {
-  if (!audioCtx) {
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    master = audioCtx.createGain();
-    master.gain.value = 0.18;
-    master.connect(audioCtx.destination);
-  }
-  stopSound();
+  ensureAudio();
+  stopSound(false);
   const now = audioCtx.currentTime;
   ch.intervals.forEach((interval, i) => {
     const osc = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
-    osc.type = waveEl.value;
-    osc.frequency.value = midiToHz(ch.rootMidi + interval);
-    gain.gain.setValueAtTime(0, now);
-    gain.gain.linearRampToValueAtTime(0.22 / (i + 1), now + .05);
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(midiToHz(ch.rootMidi + interval), now);
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.18 / (1 + i * .25), now + .008);
     osc.connect(gain).connect(master);
     osc.start(now);
-    activeOsc.push({osc, gain});
+    activeOsc.push({osc,gain});
   });
+}
+
+function triggerCurrentChord(force = false) {
+  if (!currentFingers || currentFingers < 1) return;
+  const ch = chordForGesture(keyEl.value, currentFingers, selectedQuality);
+  if (!ch) return;
+  const signature = `${keyEl.value}-${currentFingers}-${selectedQuality}`;
+  chordEl.textContent = ch.name;
+  statusEl.textContent = `${currentFingers} dita · ${selectedQuality === 'min' ? 'minore' : 'maggiore'} · risposta rapida`;
+  if (force || playedSignature !== signature) {
+    playChord(ch);
+    playedSignature = signature;
+  }
+}
+
+function selectQuality(quality) {
+  selectedQuality = quality;
+  majorBtn.classList.toggle('active', quality === 'maj');
+  minorBtn.classList.toggle('active', quality === 'min');
+  triggerCurrentChord(true);
 }
 
 function countFingers(lm, handedness) {
   let count = 0;
   [[8,6],[12,10],[16,14],[20,18]].forEach(([tip,pip]) => {
-    if (lm[tip].y < lm[pip].y - 0.025) count++;
+    if (lm[tip].y < lm[pip].y - 0.022) count++;
   });
   const isRight = handedness === 'Right';
   const thumbOpen = isRight
-    ? lm[4].x < lm[3].x - 0.035
-    : lm[4].x > lm[3].x + 0.035;
+    ? lm[4].x < lm[3].x - 0.032
+    : lm[4].x > lm[3].x + 0.032;
   if (thumbOpen) count++;
   return count;
 }
 
-function draw(results){
-  canvas.width = video.videoWidth || 640;
-  canvas.height = video.videoHeight || 480;
-  ctx.clearRect(0,0,canvas.width,canvas.height);
+function draw(results) {
+  const width = video.videoWidth || 480;
+  const height = video.videoHeight || 360;
+  if (canvas.width !== width || canvas.height !== height) {
+    canvas.width = width;
+    canvas.height = height;
+  }
+  ctx.clearRect(0,0,width,height);
 
   if (!results.multiHandLandmarks?.length) {
-    statusEl.textContent = 'Nessuna mano rilevata.';
-    lastGesture = null; stableSince = 0;
+    statusEl.textContent = 'Mostra una mano alla fotocamera';
+    candidateGesture = null;
+    candidateSince = 0;
     return;
   }
 
   const lm = results.multiHandLandmarks[0];
-  const handed = results.multiHandedness?.[0]?.label || 'Right';
+  const handedness = results.multiHandedness?.[0]?.label || 'Right';
+  drawConnectors(ctx, lm, HAND_CONNECTIONS, {color:'#68a8ff', lineWidth:3});
+  drawLandmarks(ctx, lm, {color:'#ffffff', lineWidth:1, radius:2});
 
-  drawConnectors(ctx, lm, HAND_CONNECTIONS, {color:'#60a5fa', lineWidth:4});
-  drawLandmarks(ctx, lm, {color:'#ffffff', lineWidth:1, radius:3});
-
-  const fingers = countFingers(lm, handed);
+  const fingers = countFingers(lm, handedness);
   const now = performance.now();
 
-  if (fingers !== lastGesture) {
-    lastGesture = fingers;
-    stableSince = now;
-    statusEl.textContent = `Gesto rilevato: ${fingers}. Tienilo fermo…`;
+  if (fingers !== candidateGesture) {
+    candidateGesture = fingers;
+    candidateSince = now;
     return;
   }
 
-  const stableMs = now - stableSince;
-  if (stableMs < 450) {
-    statusEl.textContent = `Gesto ${fingers}: stabilizzazione ${Math.round(stableMs)} ms`;
-    return;
-  }
+  if (now - candidateSince < STABILITY_MS || fingers === currentFingers) return;
+  currentFingers = fingers;
 
   if (fingers === 0) {
     chordEl.textContent = 'STOP';
-    statusEl.textContent = 'Pugno rilevato: suono fermato.';
-    if (playedGesture !== 0) { stopSound(); playedGesture = 0; }
+    statusEl.textContent = 'Pugno rilevato';
+    stopSound();
+    playedSignature = 'stop';
     return;
   }
 
-  const ch = chordForGesture(keyEl.value, fingers);
-  if (!ch) return;
-
-  chordEl.textContent = ch.name;
-  statusEl.textContent = `${fingers} dita → ${ch.name}`;
-  const signature = `${keyEl.value}-${fingers}-${waveEl.value}`;
-  if (playedGesture !== signature) {
-    playChord(ch);
-    playedGesture = signature;
-  }
+  triggerCurrentChord();
 }
 
 const hands = new Hands({
   locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
 });
 hands.setOptions({
-  maxNumHands: 1,
-  modelComplexity: 1,
-  minDetectionConfidence: 0.65,
-  minTrackingConfidence: 0.6
+  maxNumHands:1,
+  modelComplexity:0,
+  minDetectionConfidence:0.55,
+  minTrackingConfidence:0.5
 });
 hands.onResults(draw);
 
-document.getElementById('start').addEventListener('click', async () => {
+async function enterFullscreen() {
   try {
-    if (!window.isSecureContext) throw new Error('La pagina non è aperta tramite HTTPS.');
-    if (audioCtx?.state === 'suspended') await audioCtx.resume();
+    if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+      await document.documentElement.requestFullscreen();
+    }
+  } catch (_) {}
+}
+
+document.getElementById('start').addEventListener('click', async () => {
+  const startBtn = document.getElementById('start');
+  startError.textContent = '';
+  startBtn.disabled = true;
+  startBtn.textContent = 'Avvio…';
+  try {
+    if (!window.isSecureContext) throw new Error('La pagina deve essere aperta tramite HTTPS.');
+    ensureAudio();
+    if (audioCtx.state === 'suspended') await audioCtx.resume();
+    enterFullscreen();
     camera = new Camera(video, {
-      onFrame: async () => { await hands.send({image: video}); },
-      width: 640, height: 480
+      onFrame: async () => { await hands.send({image:video}); },
+      width:480,
+      height:360,
+      facingMode:'user'
     });
     await camera.start();
-    statusEl.textContent = 'Fotocamera avviata. Mostra la mano.';
+    startScreen.classList.add('hidden');
+    statusEl.textContent = 'Mostra da 1 a 5 dita';
   } catch (e) {
-    statusEl.innerHTML = '<span class="error">Fotocamera non disponibile: controlla il permesso Fotocamera di Chrome e apri la demo tramite HTTPS.</span>';
-    alert('Impossibile usare la fotocamera: ' + e.message);
+    startBtn.disabled = false;
+    startBtn.textContent = 'Riprova fotocamera';
+    startError.textContent = 'Errore: ' + e.message;
     console.error(e);
   }
 });
 
-document.getElementById('stop').addEventListener('click', stopSound);
-keyEl.addEventListener('change', () => { playedGesture = null; });
-waveEl.addEventListener('change', () => { playedGesture = null; });
+document.getElementById('stop').addEventListener('click', () => {
+  stopSound();
+  chordEl.textContent = 'STOP';
+  statusEl.textContent = 'Suono fermato manualmente';
+});
+document.getElementById('fullscreen').addEventListener('click', enterFullscreen);
+majorBtn.addEventListener('click', () => selectQuality('maj'));
+minorBtn.addEventListener('click', () => selectQuality('min'));
+keyEl.addEventListener('change', () => triggerCurrentChord(true));
 </script>
 </body>
 </html>
