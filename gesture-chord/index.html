@@ -13,6 +13,7 @@
       font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
       background:#05070a; color:#fff; overscroll-behavior:none;
     }
+    button, select { font:inherit; }
     .app, .stage { position:fixed; inset:0; width:100%; height:100%; height:100dvh; }
     .stage { overflow:hidden; background:#05070a; }
     video, canvas {
@@ -21,22 +22,23 @@
     }
     .shade {
       position:absolute; inset:0; pointer-events:none;
-      background:linear-gradient(to bottom,rgba(0,0,0,.55),transparent 25%,transparent 62%,rgba(0,0,0,.72));
+      background:linear-gradient(to bottom,rgba(0,0,0,.55),transparent 25%,transparent 72%,rgba(0,0,0,.32));
     }
     .topbar {
       position:absolute; top:max(10px,env(safe-area-inset-top)); left:10px; right:10px;
       display:flex; align-items:flex-start; justify-content:space-between; gap:8px;
+      z-index:3;
     }
     select, .small-btn {
       min-height:44px; border:1px solid rgba(255,255,255,.18); border-radius:13px;
       padding:0 12px; background:rgba(8,12,18,.72); color:#fff;
-      backdrop-filter:blur(9px); font-weight:700; font-size:.95rem;
+      backdrop-filter:blur(9px); font-weight:750; font-size:.95rem;
     }
-    .small-btn { min-width:46px; cursor:pointer; }
+    .small-btn { min-width:46px; cursor:pointer; touch-action:manipulation; }
     .readout {
       position:absolute; top:max(70px,calc(env(safe-area-inset-top) + 62px));
       left:50%; transform:translateX(-50%); text-align:center; pointer-events:none;
-      width:min(92vw,460px);
+      width:min(92vw,460px); z-index:2;
     }
     .chord {
       display:inline-block; min-width:128px; padding:10px 22px 12px;
@@ -50,24 +52,31 @@
       text-shadow:0 2px 6px #000;
     }
     .quality {
-      position:absolute; left:12px; right:12px;
-      bottom:max(14px,env(safe-area-inset-bottom)); display:grid;
-      grid-template-columns:1fr 1fr; gap:10px;
+      position:absolute;
+      left:max(8px,env(safe-area-inset-left));
+      top:52%; transform:translateY(-50%);
+      width:min(112px,30vw);
+      display:grid; grid-template-columns:1fr; gap:10px;
+      z-index:4;
     }
     .quality-btn {
-      height:74px; border:2px solid rgba(255,255,255,.18); border-radius:19px;
-      background:rgba(20,27,36,.78); color:#fff; backdrop-filter:blur(10px);
-      font-size:1.18rem; font-weight:850; cursor:pointer; touch-action:manipulation;
+      min-height:86px; padding:8px 5px;
+      border:2px solid rgba(255,255,255,.22); border-radius:18px;
+      background:rgba(20,27,36,.82); color:#fff; backdrop-filter:blur(10px);
+      font-size:clamp(.84rem,3.7vw,1.06rem); font-weight:900;
+      cursor:pointer; touch-action:manipulation; user-select:none;
+      box-shadow:0 8px 22px rgba(0,0,0,.28);
     }
     .quality-btn.active {
-      background:#1f6feb; border-color:#8bbcff;
-      box-shadow:0 0 0 3px rgba(31,111,235,.23), 0 8px 24px rgba(0,0,0,.35);
+      background:#1f6feb; border-color:#a5ccff;
+      box-shadow:0 0 0 3px rgba(31,111,235,.25),0 8px 24px rgba(0,0,0,.4);
     }
-    .quality-btn:active { transform:scale(.985); }
+    .quality-btn:active { transform:scale(.97); }
+    .quality-btn small { display:block; margin-top:3px; opacity:.8; font-size:.7rem; }
     .start-screen {
       position:absolute; inset:0; display:grid; place-items:center; padding:24px;
       background:radial-gradient(circle at center,#172336 0,#080c12 65%,#05070a 100%);
-      z-index:5;
+      z-index:10;
     }
     .start-card { width:min(92vw,430px); text-align:center; }
     .start-card h1 { margin:0 0 8px; font-size:1.8rem; }
@@ -107,15 +116,15 @@
       <div id="status" class="status">In attesa della fotocamera</div>
     </div>
 
-    <div class="quality">
-      <button id="major" class="quality-btn active">MAGGIORE</button>
-      <button id="minor" class="quality-btn">MINORE</button>
+    <div class="quality" aria-label="Tipo di accordo">
+      <button id="major" class="quality-btn active">MAGGIORE<small>1° rivolto</small></button>
+      <button id="minor" class="quality-btn">MINORE<small>1° rivolto</small></button>
     </div>
 
     <div id="startScreen" class="start-screen">
       <div class="start-card">
         <h1>Gesture Chord</h1>
-        <p>Versione rapida: schermo intero, risposta più immediata e scelta manuale maggiore/minore.</p>
+        <p>1–5 dita selezionano Do, Re, Mi, Fa, Sol. Gli accordi suonano nel primo rivolto.</p>
         <button id="start" class="start-btn">Avvia fotocamera</button>
         <p id="startError" class="error" style="margin-top:12px"></p>
       </div>
@@ -138,8 +147,8 @@ const minorBtn = document.getElementById('minor');
 const startScreen = document.getElementById('startScreen');
 const startError = document.getElementById('startError');
 
-const STABILITY_MS = 120;
-let audioCtx, master, activeOsc = [];
+const STABILITY_MS = 90;
+let audioCtx, master, voices = [];
 let candidateGesture = null, candidateSince = 0;
 let currentFingers = null, playedSignature = null;
 let selectedQuality = 'maj';
@@ -147,19 +156,26 @@ let camera = null;
 
 const NOTE_INDEX = {C:0,'C#':1,D:2,'D#':3,E:4,F:5,'F#':6,G:7,'G#':8,A:9,'A#':10,B:11};
 const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
-const DEGREE_MAP = {1:0, 2:2, 3:5, 4:7, 5:9};
+// Gradi consecutivi della scala maggiore: 1=C, 2=D, 3=E, 4=F, 5=G in tonalità di Do.
+const DEGREE_MAP = {1:0, 2:2, 3:4, 4:5, 5:7};
 
 function midiToHz(m){ return 440 * Math.pow(2, (m - 69) / 12); }
 
-function chordForGesture(rootName, fingers, quality) {
-  const degree = DEGREE_MAP[fingers];
-  if (degree === undefined) return null;
-  const semitone = (NOTE_INDEX[rootName] + degree) % 12;
+function chordForGesture(keyName, fingers, quality) {
+  const degreeOffset = DEGREE_MAP[fingers];
+  if (degreeOffset === undefined) return null;
+
+  // La fondamentale parte dal Do centrale (MIDI 60) e sale senza ripiegare l'ottava.
+  const rootMidi = 60 + NOTE_INDEX[keyName] + degreeOffset;
+  const rootName = NOTE_NAMES[rootMidi % 12];
   const isMinor = quality === 'min';
+
+  // Primo rivolto: terza, quinta, fondamentale all'ottava superiore.
+  const intervals = isMinor ? [3,7,12] : [4,7,12];
   return {
-    name: NOTE_NAMES[semitone] + (isMinor ? 'm' : ''),
-    intervals: isMinor ? [0,3,7] : [0,4,7],
-    rootMidi: 60 + semitone
+    name: rootName + (isMinor ? 'm' : ''),
+    intervals,
+    rootMidi
   };
 }
 
@@ -168,40 +184,45 @@ function ensureAudio() {
   const AudioCtor = window.AudioContext || window.webkitAudioContext;
   try { audioCtx = new AudioCtor({ latencyHint:'interactive' }); }
   catch (_) { audioCtx = new AudioCtor(); }
+
   master = audioCtx.createGain();
-  master.gain.value = 0.2;
+  master.gain.value = 0.22;
   master.connect(audioCtx.destination);
+
+  // Oscillatori persistenti: non vengono ricreati a ogni accordo, quindi la risposta è più pronta.
+  voices = [0,1,2].map(() => {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = 'triangle';
+    gain.gain.value = 0.0001;
+    osc.connect(gain).connect(master);
+    osc.start();
+    return {osc, gain};
+  });
 }
 
 function stopSound(resetSignature = true) {
   if (audioCtx) {
     const now = audioCtx.currentTime;
-    activeOsc.forEach(({osc,gain}) => {
-      try {
-        gain.gain.cancelScheduledValues(now);
-        gain.gain.setTargetAtTime(0, now, .012);
-        osc.stop(now + .07);
-      } catch (_) {}
+    voices.forEach(({gain}) => {
+      gain.gain.cancelScheduledValues(now);
+      gain.gain.setTargetAtTime(0.0001, now, .008);
     });
   }
-  activeOsc = [];
   if (resetSignature) playedSignature = null;
 }
 
 function playChord(ch) {
   ensureAudio();
-  stopSound(false);
   const now = audioCtx.currentTime;
   ch.intervals.forEach((interval, i) => {
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.type = 'triangle';
-    osc.frequency.setValueAtTime(midiToHz(ch.rootMidi + interval), now);
-    gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.exponentialRampToValueAtTime(0.18 / (1 + i * .25), now + .008);
-    osc.connect(gain).connect(master);
-    osc.start(now);
-    activeOsc.push({osc,gain});
+    const voice = voices[i];
+    const target = midiToHz(ch.rootMidi + interval);
+    voice.osc.frequency.cancelScheduledValues(now);
+    voice.osc.frequency.setValueAtTime(target, now);
+    voice.gain.gain.cancelScheduledValues(now);
+    voice.gain.gain.setValueAtTime(Math.max(voice.gain.gain.value, 0.0001), now);
+    voice.gain.gain.exponentialRampToValueAtTime(0.16 / (1 + i * .18), now + .005);
   });
 }
 
@@ -209,9 +230,11 @@ function triggerCurrentChord(force = false) {
   if (!currentFingers || currentFingers < 1) return;
   const ch = chordForGesture(keyEl.value, currentFingers, selectedQuality);
   if (!ch) return;
+
   const signature = `${keyEl.value}-${currentFingers}-${selectedQuality}`;
   chordEl.textContent = ch.name;
-  statusEl.textContent = `${currentFingers} dita · ${selectedQuality === 'min' ? 'minore' : 'maggiore'} · risposta rapida`;
+  statusEl.textContent = `${currentFingers} dita · ${selectedQuality === 'min' ? 'minore' : 'maggiore'} · 1° rivolto`;
+
   if (force || playedSignature !== signature) {
     playChord(ch);
     playedSignature = signature;
@@ -310,7 +333,7 @@ document.getElementById('start').addEventListener('click', async () => {
     if (!window.isSecureContext) throw new Error('La pagina deve essere aperta tramite HTTPS.');
     ensureAudio();
     if (audioCtx.state === 'suspended') await audioCtx.resume();
-    enterFullscreen();
+    await enterFullscreen();
     camera = new Camera(video, {
       onFrame: async () => { await hands.send({image:video}); },
       width:480,
@@ -328,14 +351,15 @@ document.getElementById('start').addEventListener('click', async () => {
   }
 });
 
-document.getElementById('stop').addEventListener('click', () => {
+document.getElementById('stop').addEventListener('pointerdown', (e) => {
+  e.preventDefault();
   stopSound();
   chordEl.textContent = 'STOP';
   statusEl.textContent = 'Suono fermato manualmente';
 });
 document.getElementById('fullscreen').addEventListener('click', enterFullscreen);
-majorBtn.addEventListener('click', () => selectQuality('maj'));
-minorBtn.addEventListener('click', () => selectQuality('min'));
+majorBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); selectQuality('maj'); });
+minorBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); selectQuality('min'); });
 keyEl.addEventListener('change', () => triggerCurrentChord(true));
 </script>
 </body>
