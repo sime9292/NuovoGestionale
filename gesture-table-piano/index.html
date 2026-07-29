@@ -212,17 +212,15 @@
 
   function resizeCanvas() {
     const rect = stage.getBoundingClientRect();
-    const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
-    const w = Math.max(1, Math.round(rect.width * dpr));
-    const h = Math.max(1, Math.round(rect.height * dpr));
+    const w = Math.max(1, Math.round(rect.width));
+    const h = Math.max(1, Math.round(rect.height));
     if (canvas.width !== w || canvas.height !== h) {
       canvas.width = w;
       canvas.height = h;
-      canvas.style.width = rect.width + 'px';
-      canvas.style.height = rect.height + 'px';
-      ctx.setTransform(dpr,0,0,dpr,0,0);
+      canvas.style.width = w + 'px';
+      canvas.style.height = h + 'px';
     }
-    return {w:rect.width,h:rect.height};
+    return {w,h};
   }
 
   function noteForLane(lane) {
@@ -257,8 +255,23 @@
     tracks.clear();
   }
 
-  function displayedLandmarks(raw) {
-    return raw.map(p => ({x:1-p.x,y:p.y,z:p.z}));
+  function displayedLandmarks(raw, stageW, stageH) {
+    const sourceW = video.videoWidth || 640;
+    const sourceH = video.videoHeight || 360;
+    const scale = Math.max(stageW/sourceW, stageH/sourceH);
+    const renderedW = sourceW*scale;
+    const renderedH = sourceH*scale;
+    const offsetX = (stageW-renderedW)/2;
+    const offsetY = (stageH-renderedH)/2;
+
+    return raw.map(p => {
+      const unmirroredX = (p.x*renderedW+offsetX)/stageW;
+      return {
+        x:1-unmirroredX,
+        y:(p.y*renderedH+offsetY)/stageH,
+        z:p.z
+      };
+    });
   }
 
   function processFinger(key, point, now) {
@@ -307,10 +320,11 @@
     lastFrameTime = now;
 
     const seen = new Set();
+    const rect = stage.getBoundingClientRect();
     const hands = results.multiHandLandmarks || [];
     hands.forEach((raw,index) => {
       const label = results.multiHandedness?.[index]?.label || `H${index}`;
-      const lm = displayedLandmarks(raw);
+      const lm = displayedLandmarks(raw,rect.width,rect.height);
       TIP_IDS.forEach((id,fingerIndex) => {
         const key = `${label}-${fingerIndex}`;
         seen.add(key);
@@ -373,7 +387,7 @@
     const results = lastResults;
     const handLandmarks = results?.multiHandLandmarks || [];
     handLandmarks.forEach(raw => {
-      const lm = displayedLandmarks(raw);
+      const lm = displayedLandmarks(raw,w,h);
       drawConnectors(ctx,lm,HAND_CONNECTIONS,{color:'rgba(99,174,255,.78)',lineWidth:3});
       drawLandmarks(ctx,lm,{color:'#ffffff',lineWidth:1,radius:2});
       TIP_IDS.forEach((id,idx) => {
