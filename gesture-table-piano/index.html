@@ -1,0 +1,543 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+  <meta name="theme-color" content="#05070a" />
+  <title>Table Piano – Gesture Line</title>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { width:100%; height:100%; margin:0; overflow:hidden; }
+    body {
+      background:#05070a; color:#fff;
+      font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+      overscroll-behavior:none; touch-action:none;
+    }
+    button { font:inherit; }
+    .app,.stage { position:fixed; inset:0; width:100%; height:100%; height:100dvh; }
+    .stage { overflow:hidden; background:#05070a; }
+    video,canvas { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+    video { transform:scaleX(-1); }
+    canvas { z-index:2; pointer-events:none; }
+    .shade {
+      position:absolute; inset:0; z-index:1; pointer-events:none;
+      background:
+        linear-gradient(to bottom,rgba(0,0,0,.52),transparent 20%,transparent 75%,rgba(0,0,0,.40));
+    }
+    .topbar {
+      position:absolute; z-index:6;
+      top:max(8px,env(safe-area-inset-top));
+      left:max(8px,env(safe-area-inset-left));
+      right:max(8px,env(safe-area-inset-right));
+      display:flex; justify-content:space-between; align-items:flex-start; gap:8px;
+      pointer-events:none;
+    }
+    .brand,.status-pill,.small-btn {
+      border:1px solid rgba(255,255,255,.17);
+      background:rgba(7,11,17,.73);
+      backdrop-filter:blur(9px);
+      box-shadow:0 5px 20px rgba(0,0,0,.25);
+    }
+    .brand {
+      border-radius:14px; padding:8px 11px; line-height:1.1;
+      font-weight:900; letter-spacing:.01em;
+    }
+    .brand small { display:block; margin-top:4px; opacity:.72; font-weight:650; font-size:.68rem; }
+    .top-actions { display:flex; gap:7px; pointer-events:auto; }
+    .small-btn {
+      min-width:45px; min-height:43px; padding:0 11px;
+      border-radius:13px; color:#fff; font-weight:850; cursor:pointer;
+      touch-action:manipulation;
+    }
+    .side-controls {
+      position:absolute; z-index:7;
+      left:max(8px,env(safe-area-inset-left));
+      top:50%; transform:translateY(-50%);
+      width:min(112px,25vw);
+      display:grid; gap:8px;
+    }
+    .control-btn {
+      min-height:55px; padding:7px 5px;
+      border:2px solid rgba(255,255,255,.18);
+      border-radius:16px; color:#fff;
+      background:rgba(14,21,30,.80);
+      backdrop-filter:blur(10px);
+      box-shadow:0 7px 22px rgba(0,0,0,.28);
+      font-size:clamp(.72rem,2.5vw,.94rem); font-weight:900;
+      cursor:pointer; touch-action:manipulation; user-select:none;
+    }
+    .control-btn.active { background:#1f6feb; border-color:#acd2ff; }
+    .control-btn:active,.small-btn:active { transform:scale(.97); }
+    .control-btn small { display:block; font-size:.65rem; opacity:.74; margin-top:2px; }
+    .line-hint {
+      position:absolute; z-index:5; left:50%; transform:translateX(-50%);
+      bottom:max(8px,env(safe-area-inset-bottom));
+      padding:7px 12px; border-radius:999px;
+      border:1px solid rgba(255,255,255,.16);
+      background:rgba(7,11,17,.68); backdrop-filter:blur(8px);
+      font-size:.76rem; color:#e5edf6; pointer-events:none;
+      max-width:68vw; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    }
+    .rotate {
+      display:none; position:absolute; inset:0; z-index:20; place-items:center;
+      padding:28px; text-align:center;
+      background:radial-gradient(circle,#172336 0,#070b11 70%);
+    }
+    .rotate b { display:block; font-size:2rem; margin-bottom:8px; }
+    .start-screen {
+      position:absolute; inset:0; z-index:15;
+      display:grid; place-items:center; padding:22px;
+      background:radial-gradient(circle at 50% 45%,#182941 0,#090e16 58%,#05070a 100%);
+    }
+    .start-card { width:min(92vw,520px); text-align:center; }
+    .start-card h1 { margin:0 0 8px; font-size:clamp(1.8rem,7vw,3rem); }
+    .start-card p { color:#c7d1dc; margin:0 auto 16px; line-height:1.42; max-width:460px; }
+    .start-btn {
+      width:100%; min-height:61px; border:0; border-radius:17px;
+      background:#1f6feb; color:#fff; font-size:1.12rem; font-weight:900;
+      cursor:pointer;
+    }
+    .loading { min-height:1.4em; margin-top:11px; font-size:.85rem; color:#c8d3df; }
+    .error { color:#ffb7b7; }
+    .hidden { display:none !important; }
+    @media (orientation:portrait) {
+      .rotate { display:grid; }
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+  <div class="stage" id="stage">
+    <video id="video" autoplay playsinline muted></video>
+    <canvas id="canvas"></canvas>
+    <div class="shade"></div>
+
+    <div class="topbar">
+      <div class="brand">TABLE PIANO<small id="statusText">In attesa</small></div>
+      <div class="top-actions">
+        <button id="stop" class="small-btn" aria-label="Ferma il suono">■</button>
+        <button id="fullscreen" class="small-btn" aria-label="Schermo intero">⛶</button>
+      </div>
+    </div>
+
+    <div class="side-controls">
+      <button id="calibrate" class="control-btn active">SPOSTA LINEA<small>trascina</small></button>
+      <button id="lineUp" class="control-btn">LINEA ▲</button>
+      <button id="lineDown" class="control-btn">LINEA ▼</button>
+      <button id="octave" class="control-btn">OTTAVA 4<small>tocca per cambiare</small></button>
+      <button id="sustain" class="control-btn active">SUSTAIN<small>attivo</small></button>
+    </div>
+
+    <div id="lineHint" class="line-hint">Allinea la linea al tavolo, poi premi “BLOCCA LINEA”</div>
+
+    <div id="startScreen" class="start-screen">
+      <div class="start-card">
+        <h1>Table Piano</h1>
+        <p>Metti il telefono orizzontale e fermo. Allinea la linea al piano del tavolo: quando un polpastrello la attraversa dall’alto verso il basso, parte la nota corrispondente.</p>
+        <button id="start" class="start-btn">Avvia pianoforte e fotocamera</button>
+        <div id="loadStatus" class="loading">Verranno caricati i campioni del pianoforte.</div>
+      </div>
+    </div>
+
+    <div class="rotate">
+      <div><b>↻</b>Ruota il telefono in orizzontale.</div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tone@14.8.49/build/Tone.js"></script>
+<script>
+(() => {
+  'use strict';
+
+  const stage = document.getElementById('stage');
+  const video = document.getElementById('video');
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d', {alpha:true, desynchronized:true});
+  const statusText = document.getElementById('statusText');
+  const startScreen = document.getElementById('startScreen');
+  const loadStatus = document.getElementById('loadStatus');
+  const calibrateBtn = document.getElementById('calibrate');
+  const lineHint = document.getElementById('lineHint');
+  const octaveBtn = document.getElementById('octave');
+  const sustainBtn = document.getElementById('sustain');
+
+  const TIP_IDS = [4,8,12,16,20];
+  const FINGER_NAMES = ['P','I','M','A','m'];
+  const WHITE_NOTES = ['C','D','E','F','G','A','B','C'];
+  const KEY_LABELS = ['DO','RE','MI','FA','SOL','LA','SI','DO'];
+  const LANE_COUNT = 8;
+  const HYSTERESIS = 0.045;
+  const MIN_DOWN_SPEED = 0.035;
+  const TRACK_STALE_MS = 350;
+
+  let camera = null;
+  let pianoReady = false;
+  let lineY = Number(localStorage.getItem('tablePianoLineY')) || 0.70;
+  let calibrating = true;
+  let draggingLine = false;
+  let octave = Number(localStorage.getItem('tablePianoOctave')) || 4;
+  let sustain = localStorage.getItem('tablePianoSustain') !== 'false';
+  let lastResults = null;
+  let lastFrameTime = performance.now();
+  let fpsEMA = 0;
+  let laneFlashes = Array(LANE_COUNT).fill(0);
+  const tracks = new Map();
+
+  const clamp = (v,min,max) => Math.max(min,Math.min(max,v));
+
+  const reverb = new Tone.Reverb({decay:1.65,preDelay:0.008,wet:0.11}).toDestination();
+  const compressor = new Tone.Compressor({threshold:-18,ratio:2.4,attack:0.003,release:0.18}).connect(reverb);
+  const piano = new Tone.Sampler({
+    urls:{
+      A3:'A3.mp3', C4:'C4.mp3', 'D#4':'Ds4.mp3', 'F#4':'Fs4.mp3',
+      A4:'A4.mp3', C5:'C5.mp3', 'D#5':'Ds5.mp3', 'F#5':'Fs5.mp3', A5:'A5.mp3'
+    },
+    release:1.55,
+    baseUrl:'https://tonejs.github.io/audio/salamander/'
+  }).connect(compressor);
+  Tone.Destination.volume.value = -3;
+
+  Tone.loaded().then(() => {
+    pianoReady = true;
+    loadStatus.textContent = 'Pianoforte pronto.';
+  }).catch(() => {
+    loadStatus.textContent = 'Errore nel caricamento dei campioni.';
+    loadStatus.classList.add('error');
+  });
+
+  function resizeCanvas() {
+    const rect = stage.getBoundingClientRect();
+    const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+    const w = Math.max(1, Math.round(rect.width * dpr));
+    const h = Math.max(1, Math.round(rect.height * dpr));
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width = w;
+      canvas.height = h;
+      canvas.style.width = rect.width + 'px';
+      canvas.style.height = rect.height + 'px';
+      ctx.setTransform(dpr,0,0,dpr,0,0);
+    }
+    return {w:rect.width,h:rect.height};
+  }
+
+  function noteForLane(lane) {
+    const letter = WHITE_NOTES[lane];
+    const noteOctave = octave + (lane === 7 ? 1 : 0);
+    return letter + noteOctave;
+  }
+
+  function velocityFromSpeed(speed) {
+    return clamp(0.36 + (speed - MIN_DOWN_SPEED) * 0.85, 0.36, 0.98);
+  }
+
+  function playLane(lane, velocity) {
+    if (!pianoReady) return;
+    const note = noteForLane(lane);
+    const now = Tone.now();
+    const duration = sustain ? 2.2 : 0.72;
+    piano.triggerAttackRelease(note, duration, now, velocity);
+    laneFlashes[lane] = performance.now() + 145;
+    statusText.textContent = `${KEY_LABELS[lane]}${lane === 7 ? octave + 1 : octave} · ${Math.round(velocity * 100)}%`;
+    if (navigator.vibrate) navigator.vibrate(8);
+  }
+
+  function stopAll() {
+    if (pianoReady) {
+      try { piano.releaseAll(Tone.now()); } catch (_) {}
+    }
+    statusText.textContent = 'Suono fermato';
+  }
+
+  function resetTracking() {
+    tracks.clear();
+  }
+
+  function displayedLandmarks(raw) {
+    return raw.map(p => ({x:1-p.x,y:p.y,z:p.z}));
+  }
+
+  function processFinger(key, point, now) {
+    let state = tracks.get(key);
+    if (!state) {
+      state = {x:point.x,y:point.y,t:now,armed:point.y < lineY-HYSTERESIS,lastSeen:now};
+      tracks.set(key,state);
+      return;
+    }
+
+    const dt = Math.max(1, now-state.t);
+    const dy = point.y-state.y;
+    const downSpeed = (dy/dt)*1000;
+
+    if (point.y < lineY-HYSTERESIS) state.armed = true;
+
+    if (
+      !calibrating &&
+      state.armed &&
+      state.y < lineY &&
+      point.y >= lineY &&
+      downSpeed >= MIN_DOWN_SPEED
+    ) {
+      const denom = point.y-state.y;
+      const ratio = Math.abs(denom) < 0.00001 ? 1 : clamp((lineY-state.y)/denom,0,1);
+      const crossX = state.x + (point.x-state.x)*ratio;
+      const lane = clamp(Math.floor(crossX*LANE_COUNT),0,LANE_COUNT-1);
+      playLane(lane,velocityFromSpeed(downSpeed));
+      state.armed = false;
+    }
+
+    state.x = point.x;
+    state.y = point.y;
+    state.t = now;
+    state.lastSeen = now;
+  }
+
+  function processResults(results) {
+    lastResults = results;
+    const now = performance.now();
+    const dt = now-lastFrameTime;
+    if (dt > 0 && dt < 1000) {
+      const fps = 1000/dt;
+      fpsEMA = fpsEMA ? fpsEMA*0.90+fps*0.10 : fps;
+    }
+    lastFrameTime = now;
+
+    const seen = new Set();
+    const hands = results.multiHandLandmarks || [];
+    hands.forEach((raw,index) => {
+      const label = results.multiHandedness?.[index]?.label || `H${index}`;
+      const lm = displayedLandmarks(raw);
+      TIP_IDS.forEach((id,fingerIndex) => {
+        const key = `${label}-${fingerIndex}`;
+        seen.add(key);
+        processFinger(key,lm[id],now);
+      });
+    });
+
+    for (const [key,state] of tracks) {
+      if (!seen.has(key) && now-state.lastSeen > TRACK_STALE_MS) tracks.delete(key);
+    }
+  }
+
+  function render() {
+    const {w,h} = resizeCanvas();
+    ctx.clearRect(0,0,w,h);
+    const now = performance.now();
+    const linePx = lineY*h;
+    const resetPx = (lineY-HYSTERESIS)*h;
+
+    for (let lane=0; lane<LANE_COUNT; lane++) {
+      const x0 = lane*w/LANE_COUNT;
+      const x1 = (lane+1)*w/LANE_COUNT;
+      const active = laneFlashes[lane] > now;
+      ctx.fillStyle = active ? 'rgba(60,150,255,.42)' : 'rgba(255,255,255,.045)';
+      ctx.fillRect(x0,linePx,x1-x0,h-linePx);
+      ctx.strokeStyle = 'rgba(255,255,255,.22)';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(x0,linePx); ctx.lineTo(x0,h); ctx.stroke();
+
+      ctx.fillStyle = active ? '#ffffff' : 'rgba(255,255,255,.86)';
+      ctx.font = `900 ${Math.max(12,Math.min(22,w/38))}px system-ui`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillText(KEY_LABELS[lane],(x0+x1)/2,linePx+10);
+    }
+    ctx.beginPath(); ctx.moveTo(w,linePx); ctx.lineTo(w,h);
+    ctx.strokeStyle='rgba(255,255,255,.22)'; ctx.stroke();
+
+    if (calibrating) {
+      ctx.setLineDash([7,7]);
+      ctx.strokeStyle='rgba(255,255,255,.30)';
+      ctx.lineWidth=1.5;
+      ctx.beginPath(); ctx.moveTo(0,resetPx); ctx.lineTo(w,resetPx); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    ctx.strokeStyle = calibrating ? '#ffd45a' : '#56a9ff';
+    ctx.lineWidth = calibrating ? 5 : 4;
+    ctx.shadowColor = calibrating ? 'rgba(255,212,90,.65)' : 'rgba(62,151,255,.62)';
+    ctx.shadowBlur = 12;
+    ctx.beginPath(); ctx.moveTo(0,linePx); ctx.lineTo(w,linePx); ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    if (calibrating) {
+      ctx.fillStyle='#ffd45a';
+      ctx.beginPath(); ctx.arc(w-28,linePx,11,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(28,linePx,11,0,Math.PI*2); ctx.fill();
+    }
+
+    const results = lastResults;
+    const handLandmarks = results?.multiHandLandmarks || [];
+    handLandmarks.forEach(raw => {
+      const lm = displayedLandmarks(raw);
+      drawConnectors(ctx,lm,HAND_CONNECTIONS,{color:'rgba(99,174,255,.78)',lineWidth:3});
+      drawLandmarks(ctx,lm,{color:'#ffffff',lineWidth:1,radius:2});
+      TIP_IDS.forEach((id,idx) => {
+        const p=lm[id], x=p.x*w, y=p.y*h;
+        const armed = p.y < lineY-HYSTERESIS;
+        ctx.fillStyle=armed?'#69ffb0':'#ffcf5b';
+        ctx.strokeStyle='rgba(0,0,0,.65)';
+        ctx.lineWidth=2;
+        ctx.beginPath();ctx.arc(x,y,7,0,Math.PI*2);ctx.fill();ctx.stroke();
+        ctx.fillStyle='rgba(0,0,0,.78)';
+        ctx.font='900 9px system-ui';ctx.textAlign='center';ctx.textBaseline='middle';
+        ctx.fillText(FINGER_NAMES[idx],x,y+.5);
+      });
+    });
+
+    requestAnimationFrame(render);
+  }
+
+  function setCalibrating(value) {
+    calibrating = value;
+    draggingLine = false;
+    calibrateBtn.classList.toggle('active',value);
+    calibrateBtn.firstChild.textContent = value ? 'BLOCCA LINEA' : 'SPOSTA LINEA';
+    lineHint.textContent = value
+      ? 'Trascina la linea gialla sul bordo del tavolo, poi bloccala'
+      : 'Premi verso il basso attraversando la linea blu';
+    resetTracking();
+    localStorage.setItem('tablePianoLineY',String(lineY));
+  }
+
+  function moveLine(delta) {
+    lineY = clamp(lineY+delta,0.28,0.88);
+    localStorage.setItem('tablePianoLineY',String(lineY));
+    resetTracking();
+  }
+
+  function pointerToY(event) {
+    const rect=stage.getBoundingClientRect();
+    return clamp((event.clientY-rect.top)/rect.height,0.28,0.88);
+  }
+
+  stage.addEventListener('pointerdown',event => {
+    if (!calibrating) return;
+    const rect=stage.getBoundingClientRect();
+    const y=(event.clientY-rect.top)/rect.height;
+    if (Math.abs(y-lineY)<0.11) {
+      draggingLine=true;
+      stage.setPointerCapture?.(event.pointerId);
+      lineY=pointerToY(event);
+      resetTracking();
+      event.preventDefault();
+    }
+  });
+  stage.addEventListener('pointermove',event => {
+    if (!draggingLine || !calibrating) return;
+    lineY=pointerToY(event);
+    resetTracking();
+    event.preventDefault();
+  });
+  const endDrag=event => {
+    if (!draggingLine) return;
+    draggingLine=false;
+    localStorage.setItem('tablePianoLineY',String(lineY));
+    try{stage.releasePointerCapture?.(event.pointerId);}catch(_){}
+  };
+  stage.addEventListener('pointerup',endDrag);
+  stage.addEventListener('pointercancel',endDrag);
+
+  calibrateBtn.addEventListener('pointerdown',event => {
+    event.preventDefault();
+    setCalibrating(!calibrating);
+  });
+  document.getElementById('lineUp').addEventListener('pointerdown',event => {
+    event.preventDefault(); moveLine(-0.018);
+  });
+  document.getElementById('lineDown').addEventListener('pointerdown',event => {
+    event.preventDefault(); moveLine(0.018);
+  });
+
+  octaveBtn.addEventListener('pointerdown',event => {
+    event.preventDefault();
+    octave = octave >= 5 ? 3 : octave+1;
+    octaveBtn.firstChild.textContent = `OTTAVA ${octave}`;
+    localStorage.setItem('tablePianoOctave',String(octave));
+    stopAll();
+  });
+
+  sustainBtn.addEventListener('pointerdown',event => {
+    event.preventDefault();
+    sustain=!sustain;
+    sustainBtn.classList.toggle('active',sustain);
+    sustainBtn.querySelector('small').textContent=sustain?'attivo':'breve';
+    localStorage.setItem('tablePianoSustain',String(sustain));
+    if (!sustain) stopAll();
+  });
+
+  async function enterFullscreen() {
+    try {
+      if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+        await document.documentElement.requestFullscreen();
+      }
+      if (screen.orientation?.lock) {
+        try { await screen.orientation.lock('landscape'); } catch (_) {}
+      }
+    } catch (_) {}
+  }
+
+  const hands = new Hands({
+    locateFile:file => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+  });
+  hands.setOptions({
+    maxNumHands:2,
+    modelComplexity:0,
+    minDetectionConfidence:0.55,
+    minTrackingConfidence:0.52
+  });
+  hands.onResults(processResults);
+
+  document.getElementById('start').addEventListener('click',async() => {
+    const btn=document.getElementById('start');
+    btn.disabled=true;
+    btn.textContent='Caricamento…';
+    loadStatus.classList.remove('error');
+    try {
+      if (!window.isSecureContext) throw new Error('Apri la pagina tramite HTTPS.');
+      await Tone.start();
+      Tone.getContext().lookAhead=0.006;
+      if (!pianoReady) {
+        loadStatus.textContent='Caricamento campioni di pianoforte…';
+        await Tone.loaded();
+        pianoReady=true;
+      }
+      loadStatus.textContent='Pianoforte pronto · avvio fotocamera…';
+      await enterFullscreen();
+      camera=new Camera(video,{
+        onFrame:async()=>{await hands.send({image:video});},
+        width:640,height:360,facingMode:'user'
+      });
+      await camera.start();
+      startScreen.classList.add('hidden');
+      statusText.textContent='Calibra la linea';
+      setCalibrating(true);
+    } catch(error) {
+      btn.disabled=false;
+      btn.textContent='Riprova';
+      loadStatus.textContent='Errore: '+error.message;
+      loadStatus.classList.add('error');
+      console.error(error);
+    }
+  });
+
+  document.getElementById('stop').addEventListener('pointerdown',event => {
+    event.preventDefault(); stopAll();
+  });
+  document.getElementById('fullscreen').addEventListener('click',enterFullscreen);
+
+  octaveBtn.firstChild.textContent=`OTTAVA ${octave}`;
+  sustainBtn.classList.toggle('active',sustain);
+  sustainBtn.querySelector('small').textContent=sustain?'attivo':'breve';
+
+  window.addEventListener('resize',resizeCanvas);
+  window.addEventListener('orientationchange',resetTracking);
+  requestAnimationFrame(render);
+})();
+</script>
+</body>
+</html>
