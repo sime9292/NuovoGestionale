@@ -1,0 +1,339 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+  <meta name="theme-color" content="#05070a" />
+  <title>Gesture Chords Fullscreen</title>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin:0; width:100%; height:100%; overflow:hidden; background:#05070a; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
+    #app { position:fixed; inset:0; background:#05070a; }
+    video, canvas {
+      position:absolute; inset:0; width:100%; height:100%; object-fit:cover;
+      transform:scaleX(-1);
+    }
+    #shade {
+      position:absolute; inset:0;
+      background:linear-gradient(to bottom,rgba(0,0,0,.45),rgba(0,0,0,.04) 35%,rgba(0,0,0,.05) 65%,rgba(0,0,0,.62));
+      pointer-events:none;
+    }
+    #top {
+      position:absolute; top:0; left:0; right:0;
+      padding:calc(env(safe-area-inset-top) + 10px) 12px 10px;
+      display:flex; gap:8px; align-items:center; justify-content:center;
+      z-index:5;
+    }
+    select, button {
+      border:1px solid rgba(255,255,255,.18); color:#fff;
+      background:rgba(10,14,20,.72); backdrop-filter:blur(10px);
+      border-radius:13px; padding:11px 12px; font-weight:700; font-size:15px;
+    }
+    button { cursor:pointer; }
+    #center {
+      position:absolute; inset:0; z-index:4; display:flex; align-items:center; justify-content:center;
+      pointer-events:none; text-align:center; padding:20px;
+    }
+    #chordWrap {
+      min-width:min(82vw,620px);
+      padding:20px 26px 24px;
+      border-radius:28px;
+      background:rgba(0,0,0,.32);
+      border:1px solid rgba(255,255,255,.12);
+      backdrop-filter:blur(6px);
+      box-shadow:0 18px 70px rgba(0,0,0,.28);
+    }
+    #chord { font-size:clamp(86px,23vw,210px); font-weight:950; line-height:.9; letter-spacing:-.06em; text-shadow:0 6px 30px rgba(0,0,0,.72); }
+    #quality { margin-top:10px; font-size:clamp(22px,6vw,48px); font-weight:900; letter-spacing:.22em; }
+    #degree { margin-top:5px; font-size:clamp(14px,3.2vw,24px); color:#d8e2ec; font-weight:750; }
+    #bottom {
+      position:absolute; left:0; right:0; bottom:0; z-index:5;
+      padding:10px 14px calc(env(safe-area-inset-bottom) + 13px);
+      display:flex; flex-direction:column; align-items:center; gap:8px;
+    }
+    #status {
+      max-width:850px; text-align:center; color:#fff; font-weight:700;
+      background:rgba(0,0,0,.52); border:1px solid rgba(255,255,255,.12);
+      border-radius:14px; padding:9px 13px; backdrop-filter:blur(8px);
+    }
+    #legend {
+      color:#d9e2ec; font-size:13px; text-align:center;
+      text-shadow:0 2px 8px #000;
+    }
+    #startOverlay {
+      position:absolute; inset:0; z-index:20; display:flex; align-items:center; justify-content:center;
+      background:radial-gradient(circle at 50% 38%,#182536,#05070a 70%);
+      padding:22px;
+    }
+    .startCard {
+      width:min(92vw,540px); border:1px solid #2c3a49; border-radius:24px;
+      padding:24px; background:rgba(10,15,22,.94); text-align:center;
+      box-shadow:0 30px 100px rgba(0,0,0,.55);
+    }
+    .startCard h1 { margin:0 0 8px; font-size:28px; }
+    .startCard p { color:#c8d2de; line-height:1.5; margin:0 0 18px; }
+    #startBtn { background:#1677ff; width:100%; font-size:18px; padding:15px; }
+    .mapping { margin-top:15px; color:#aebdcb; font-size:14px; line-height:1.6; }
+    .major { color:#7CFFB2; }
+    .minor { color:#FFB36A; }
+    .error { color:#ffb4b4; }
+    @media (orientation:landscape) {
+      #chordWrap { min-width:min(58vw,670px); }
+      #chord { font-size:clamp(82px,19vh,180px); }
+      #quality { font-size:clamp(20px,5vh,42px); }
+    }
+  </style>
+</head>
+<body>
+<div id="app">
+  <video id="video" autoplay playsinline muted></video>
+  <canvas id="canvas"></canvas>
+  <div id="shade"></div>
+
+  <div id="top">
+    <select id="key" aria-label="Tonalità">
+      <option value="C">Tonalità DO</option>
+      <option value="D">Tonalità RE</option>
+      <option value="E">Tonalità MI</option>
+      <option value="F">Tonalità FA</option>
+      <option value="G">Tonalità SOL</option>
+      <option value="A">Tonalità LA</option>
+      <option value="B">Tonalità SI</option>
+    </select>
+    <select id="wave" aria-label="Suono">
+      <option value="triangle">Synth</option>
+      <option value="sine">Morbido</option>
+      <option value="square">Brillante</option>
+    </select>
+    <button id="fsBtn" type="button">⛶</button>
+  </div>
+
+  <div id="center">
+    <div id="chordWrap">
+      <div id="chord">—</div>
+      <div id="quality">ATTESA</div>
+      <div id="degree">Mostra la mano</div>
+    </div>
+  </div>
+
+  <div id="bottom">
+    <div id="status">Avvia la fotocamera.</div>
+    <div id="legend">1–5 dita = grado dell’accordo · inclina la mano a destra = <b class="major">MAGGIORE</b> · a sinistra = <b class="minor">MINORE</b> · pugno = STOP</div>
+  </div>
+
+  <div id="startOverlay">
+    <div class="startCard">
+      <h1>Gesture Chords</h1>
+      <p>Versione a schermo intero con accordi maggiori e minori riconosciuti dalla mano.</p>
+      <button id="startBtn" type="button">Avvia fotocamera e audio</button>
+      <div class="mapping">
+        Numero di dita: grado 1–5<br>
+        Mano inclinata a destra: maggiore<br>
+        Mano inclinata a sinistra: minore
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const video = $('video'), canvas = $('canvas'), ctx = canvas.getContext('2d');
+const chordEl = $('chord'), qualityEl = $('quality'), degreeEl = $('degree'), statusEl = $('status');
+const keyEl = $('key'), waveEl = $('wave');
+
+let camera = null;
+let audioCtx = null, master = null, activeVoices = [];
+let lastCandidate = '', candidateSince = 0, currentSignature = '';
+const HOLD_MS = 220;
+
+const NOTE_INDEX = {C:0,'C#':1,D:2,'D#':3,E:4,F:5,'F#':6,G:7,'G#':8,A:9,'A#':10,B:11};
+const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+const DEGREE_OFFSETS = {1:0, 2:2, 3:4, 4:5, 5:7};
+const ROMAN = {1:'I',2:'II',3:'III',4:'IV',5:'V'};
+
+function midiToHz(m) { return 440 * Math.pow(2,(m-69)/12); }
+
+function ensureAudio() {
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)({latencyHint:'interactive'});
+    master = audioCtx.createGain();
+    master.gain.value = 0.55;
+    master.connect(audioCtx.destination);
+  }
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+}
+
+function stopSound() {
+  if (!audioCtx) return;
+  const now = audioCtx.currentTime;
+  activeVoices.forEach(v => {
+    try {
+      v.gain.gain.cancelScheduledValues(now);
+      v.gain.gain.setTargetAtTime(0,now,.025);
+      v.osc.stop(now+.16);
+    } catch(e) {}
+  });
+  activeVoices = [];
+}
+
+function playChord(rootMidi, quality) {
+  ensureAudio();
+  stopSound();
+  const intervals = quality === 'min' ? [0,3,7] : [0,4,7];
+  const now = audioCtx.currentTime;
+  intervals.forEach((interval,i) => {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = waveEl.value;
+    osc.frequency.setValueAtTime(midiToHz(rootMidi + interval),now);
+    gain.gain.setValueAtTime(0,now);
+    gain.gain.linearRampToValueAtTime(0.18/(1+i*.18),now+.025);
+    osc.connect(gain).connect(master);
+    osc.start(now);
+    activeVoices.push({osc,gain});
+  });
+}
+
+function countFingers(lm, handedness) {
+  let n = 0;
+  [[8,6],[12,10],[16,14],[20,18]].forEach(([tip,pip]) => {
+    if (lm[tip].y < lm[pip].y - .025) n++;
+  });
+  const isRight = handedness === 'Right';
+  const thumbOpen = isRight ? lm[4].x < lm[3].x - .035 : lm[4].x > lm[3].x + .035;
+  if (thumbOpen) n++;
+  return n;
+}
+
+function handTiltQuality(lm) {
+  const dx = lm[9].x - lm[0].x;
+  const dy = lm[9].y - lm[0].y;
+  const angle = Math.atan2(dx, -dy) * 180 / Math.PI;
+  const deadZone = 9;
+  if (angle > deadZone) return 'maj';
+  if (angle < -deadZone) return 'min';
+  return null;
+}
+
+function chordData(keyName, degree, quality) {
+  const rootSemitone = (NOTE_INDEX[keyName] + DEGREE_OFFSETS[degree]) % 12;
+  const rootName = NOTE_NAMES[rootSemitone];
+  const display = rootName + (quality === 'min' ? 'm' : '');
+  return {rootMidi:60+rootSemitone, rootName, display};
+}
+
+function setUI(data, degree, quality) {
+  chordEl.textContent = data.display;
+  qualityEl.textContent = quality === 'min' ? 'MINORE' : 'MAGGIORE';
+  qualityEl.className = quality === 'min' ? 'minor' : 'major';
+  degreeEl.textContent = `${ROMAN[degree]} grado · ${degree} dita`;
+}
+
+function onResults(results) {
+  canvas.width = video.videoWidth || innerWidth;
+  canvas.height = video.videoHeight || innerHeight;
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  if (!results.multiHandLandmarks || !results.multiHandLandmarks.length) {
+    statusEl.textContent = 'Nessuna mano rilevata.';
+    lastCandidate = ''; candidateSince = 0;
+    return;
+  }
+
+  const lm = results.multiHandLandmarks[0];
+  const handed = results.multiHandedness?.[0]?.label || 'Right';
+
+  drawConnectors(ctx,lm,HAND_CONNECTIONS,{color:'#56a8ff',lineWidth:4});
+  drawLandmarks(ctx,lm,{color:'#ffffff',lineWidth:1,radius:3});
+
+  const fingers = countFingers(lm,handed);
+  if (fingers === 0) {
+    chordEl.textContent = 'STOP';
+    qualityEl.textContent = '';
+    degreeEl.textContent = 'Pugno rilevato';
+    statusEl.textContent = 'Suono fermato.';
+    if (currentSignature !== 'stop') {
+      stopSound();
+      currentSignature = 'stop';
+    }
+    return;
+  }
+
+  const quality = handTiltQuality(lm);
+  if (!quality) {
+    statusEl.textContent = `${fingers} dita: inclina chiaramente la mano a destra o a sinistra.`;
+    degreeEl.textContent = `${fingers} dita · qualità non definita`;
+    return;
+  }
+
+  const candidate = `${keyEl.value}-${fingers}-${quality}`;
+  const now = performance.now();
+
+  if (candidate !== lastCandidate) {
+    lastCandidate = candidate;
+    candidateSince = now;
+    statusEl.textContent = 'Mantieni il gesto per un istante…';
+    return;
+  }
+
+  if (now - candidateSince < HOLD_MS) {
+    statusEl.textContent = `Stabilizzazione ${Math.round(now-candidateSince)} / ${HOLD_MS} ms`;
+    return;
+  }
+
+  const data = chordData(keyEl.value,fingers,quality);
+  setUI(data,fingers,quality);
+  statusEl.textContent = `${data.display} riconosciuto`;
+
+  if (currentSignature !== candidate) {
+    playChord(data.rootMidi,quality);
+    currentSignature = candidate;
+  }
+}
+
+const hands = new Hands({
+  locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+});
+hands.setOptions({
+  maxNumHands:1,
+  modelComplexity:1,
+  minDetectionConfidence:.65,
+  minTrackingConfidence:.60
+});
+hands.onResults(onResults);
+
+async function enterFullscreen() {
+  try {
+    const el = document.documentElement;
+    if (!document.fullscreenElement && el.requestFullscreen) await el.requestFullscreen();
+  } catch(e) {}
+}
+
+$('startBtn').addEventListener('click', async () => {
+  try {
+    ensureAudio();
+    await enterFullscreen();
+    camera = new Camera(video,{
+      onFrame: async () => { await hands.send({image:video}); },
+      width:960, height:540
+    });
+    await camera.start();
+    $('startOverlay').style.display = 'none';
+    statusEl.textContent = 'Fotocamera attiva. Mostra da 1 a 5 dita.';
+  } catch(e) {
+    statusEl.innerHTML = '<span class="error">Fotocamera non disponibile. Apri la pagina da un sito HTTPS in Chrome e autorizza la fotocamera.</span>';
+    console.error(e);
+  }
+});
+
+$('fsBtn').addEventListener('click', enterFullscreen);
+keyEl.addEventListener('change',() => { currentSignature=''; lastCandidate=''; });
+waveEl.addEventListener('change',() => { currentSignature=''; });
+document.addEventListener('visibilitychange',() => { if (document.hidden) stopSound(); });
+</script>
+</body>
+</html>
