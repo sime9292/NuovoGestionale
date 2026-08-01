@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+  <meta name="theme-color" content="#050812">
+  <title>BulletCam Arcade</title>
+  <style>
+    :root{color-scheme:dark;--accent:#6ee7ff;--danger:#ff5d7a;--good:#78ffa5}
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#050812;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#fff}
+    #app{position:fixed;inset:0;background:#050812}
+    video,#game{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+    video.mirror{transform:scaleX(-1)}
+    #game{display:none;touch-action:none}
+    #shade{position:absolute;inset:0;pointer-events:none;background:linear-gradient(to bottom,rgba(1,3,8,.56),transparent 27%,transparent 66%,rgba(1,3,8,.76))}
+    #hud{position:absolute;inset:0;pointer-events:none;display:flex;flex-direction:column;justify-content:space-between;padding:calc(env(safe-area-inset-top) + 10px) 10px calc(env(safe-area-inset-bottom) + 10px)}
+    .topbar,.bottombar{display:flex;gap:8px;align-items:center;justify-content:space-between}
+    .stats{display:flex;gap:7px;flex-wrap:wrap}
+    .badge,.panel{background:rgba(5,10,20,.72);border:1px solid rgba(255,255,255,.15);backdrop-filter:blur(10px);box-shadow:0 10px 32px rgba(0,0,0,.28)}
+    .badge{border-radius:999px;padding:8px 11px;font-size:12px;font-weight:850;letter-spacing:.035em}
+    .panel{border-radius:20px;padding:16px;width:min(94vw,660px)}
+    #statusPanel{margin:0 auto;text-align:center}
+    #status{font-size:15px;font-weight:800;line-height:1.35}
+    #detail{margin-top:5px;color:#bed0e5;font-size:12px;line-height:1.35}
+    #flightHud{display:none}
+    #reticle{position:absolute;left:50%;top:50%;width:50px;height:50px;transform:translate(-50%,-50%);pointer-events:none;display:none}
+    #reticle:before,#reticle:after{content:"";position:absolute;inset:0;border:2px solid rgba(255,255,255,.9);border-radius:50%;box-shadow:0 0 14px rgba(120,220,255,.65)}
+    #reticle:after{inset:17px;background:#fff;border:0;opacity:.9}
+    #joystick{position:absolute;left:18px;bottom:calc(env(safe-area-inset-bottom) + 22px);width:116px;height:116px;border-radius:50%;border:1px solid rgba(255,255,255,.2);background:rgba(4,9,18,.28);display:none;pointer-events:none}
+    #stick{position:absolute;left:38px;top:38px;width:40px;height:40px;border-radius:50%;background:rgba(110,231,255,.85);box-shadow:0 0 22px rgba(110,231,255,.55)}
+    #lookBack{position:absolute;right:15px;bottom:calc(env(safe-area-inset-bottom) + 28px);z-index:7;display:none}
+    button{border:1px solid rgba(255,255,255,.15);border-radius:15px;padding:13px 16px;background:rgba(18,30,49,.95);color:#fff;font:800 15px system-ui;box-shadow:0 8px 25px rgba(0,0,0,.28)}
+    button.primary{background:#1769ff}button.good{background:#167348}button.danger{background:#9b2941}button.ghost{background:rgba(14,23,38,.72)}button:disabled{opacity:.45}
+    .actions{display:flex;gap:9px;flex-wrap:wrap;justify-content:center;margin-top:14px;pointer-events:auto}
+    #modal{position:absolute;inset:0;z-index:20;display:grid;place-items:center;padding:20px;background:radial-gradient(circle at 50% 27%,rgba(34,63,110,.72),rgba(3,6,13,.96) 72%)}
+    #card{width:min(94vw,670px);border-radius:26px;padding:24px;background:rgba(7,13,25,.97);border:1px solid #2b405e;box-shadow:0 28px 80px rgba(0,0,0,.5);text-align:center}
+    h1{margin:0 0 8px;font-size:clamp(27px,7vw,44px);letter-spacing:-.025em}
+    h2{margin:0 0 8px;font-size:clamp(23px,6vw,34px)}
+    p{margin:8px 0;color:#c4d0df;line-height:1.48}
+    .steps{margin:17px 0;display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+    .step{padding:12px 8px;border-radius:16px;background:#101a2a;border:1px solid #263a55;font-size:12px;font-weight:780;color:#d8e7f7}
+    .step b{display:block;font-size:19px;margin-bottom:4px;color:#fff}
+    .preview{margin:14px auto 5px;width:min(70vw,300px);aspect-ratio:3/4;border-radius:22px;overflow:hidden;border:1px solid rgba(255,255,255,.18);background:#080d17;position:relative}
+    .preview canvas{width:100%;height:100%;object-fit:cover}
+    #countdown{position:absolute;inset:0;z-index:15;display:none;place-items:center;font-size:min(42vw,220px);font-weight:950;text-shadow:0 12px 50px rgba(0,0,0,.8);pointer-events:none}
+    #flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:14}
+    #flash.go{animation:flash .32s ease-out}@keyframes flash{0%{opacity:.95}100%{opacity:0}}
+    #toast{position:absolute;top:22%;left:50%;transform:translateX(-50%) translateY(-10px);z-index:18;padding:12px 18px;border-radius:999px;background:rgba(7,15,27,.9);border:1px solid rgba(255,255,255,.18);font-weight:900;opacity:0;pointer-events:none;transition:.2s}
+    #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+    .rank{font-size:72px;font-weight:950;line-height:1;margin:9px 0;background:linear-gradient(180deg,#fff,#8bdcff);-webkit-background-clip:text;color:transparent}
+    .scoreline{font-size:20px;font-weight:900;margin:7px 0}
+    .tiny{font-size:11px;color:#8fa4bc}
+    @media(max-width:420px){.steps{grid-template-columns:1fr}.step{display:flex;gap:10px;align-items:center;text-align:left}.step b{margin:0}.panel{padding:13px}}
+  </style>
+</head>
+<body>
+<div id="app">
+  <video id="video" autoplay playsinline muted></video>
+  <canvas id="game"></canvas>
+  <div id="shade"></div>
+  <div id="reticle"></div>
+  <div id="joystick"><div id="stick"></div></div>
+  <button id="lookBack" class="ghost">Tieni premuto: guarda dietro</button>
+  <div id="flash"></div><div id="countdown">3</div><div id="toast"></div>
+
+  <div id="hud">
+    <div class="topbar">
+      <div class="stats">
+        <div id="phase" class="badge">MISSIONE</div>
+        <div id="scoreBadge" class="badge" style="display:none">0 pt</div>
+        <div id="comboBadge" class="badge" style="display:none">x1</div>
+      </div>
+      <div id="distanceBadge" class="badge" style="display:none">0 m</div>
+    </div>
+    <div id="statusPanel" class="panel">
+      <div id="status">Premi Inizia missione.</div>
+      <div id="detail">La prima versione crea una spettacolare illusione 2.5D usando una foto frontale e una scena ripresa dalla fotocamera posteriore.</div>
+    </div>
+  </div>
+
+  <div id="modal"><div id="card"></div></div>
+</div>
+<script>
+(()=>{'use strict';
+const $=id=>document.getElementById(id);
+const video=$('video'),game=$('game'),ctx=game.getContext('2d'),modal=$('modal'),card=$('card'),statusEl=$('status'),detailEl=$('detail'),phaseEl=$('phase'),scoreBadge=$('scoreBadge'),comboBadge=$('comboBadge'),distanceBadge=$('distanceBadge'),reticle=$('reticle'),joystick=$('joystick'),stick=$('stick'),lookBackBtn=$('lookBack'),countdownEl=$('countdown'),flash=$('flash'),toast=$('toast');
+const selfie=document.createElement('canvas'),scene=document.createElement('canvas');
+let stream=null,facing='user',stage='intro',raf=0,audioCtx=null,orientationReady=false,ori={beta:0,gamma:0},oriBase={beta:0,gamma:0},pointer={active:false,x:0,y:0,startX:0,startY:0},lookBack=false;
+let flight=null,lastTime=0;
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)),lerp=(a,b,t)=>a+(b-a)*t,rand=(a,b)=>a+Math.random()*(b-a);
+
+function setModal(html){card.innerHTML=html;modal.style.display='grid'}
+function hideModal(){modal.style.display='none'}
+function setStatus(a,b=''){statusEl.textContent=a;detailEl.textContent=b}
+function flashShot(){flash.classList.remove('go');void flash.offsetWidth;flash.classList.add('go')}
+function showToast(text){toast.textContent=text;toast.classList.add('show');clearTimeout(showToast.t);showToast.t=setTimeout(()=>toast.classList.remove('show'),800)}
+function ensureAudio(){if(audioCtx)return;audioCtx=new(window.AudioContext||window.webkitAudioContext)({latencyHint:'interactive'})}
+function tone(freq,dur=.16,type='sine',gain=.12,slide=1){if(!audioCtx)return;const n=audioCtx.currentTime,o=audioCtx.createOscillator(),g=audioCtx.createGain();o.type=type;o.frequency.setValueAtTime(freq,n);o.frequency.exponentialRampToValueAtTime(Math.max(30,freq*slide),n+dur);g.gain.setValueAtTime(.0001,n);g.gain.exponentialRampToValueAtTime(gain,n+.008);g.gain.exponentialRampToValueAtTime(.0001,n+dur);o.connect(g).connect(audioCtx.destination);o.start(n);o.stop(n+dur+.02)}
+function noise(dur=.18,gain=.08){if(!audioCtx)return;const n=audioCtx.currentTime,b=audioCtx.createBuffer(1,Math.floor(audioCtx.sampleRate*dur),audioCtx.sampleRate),d=b.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*(1-i/d.length);const s=audioCtx.createBufferSource(),g=audioCtx.createGain();g.gain.value=gain;s.buffer=b;s.connect(g).connect(audioCtx.destination);s.start(n)}
+function fireSound(){tone(900,.22,'sawtooth',.18,.08);noise(.16,.12)}
+function ringSound(combo){tone(520+combo*45,.12,'triangle',.12,1.45)}
+function crashSound(){tone(150,.35,'square',.16,.3);noise(.28,.18)}
+
+async function stopCamera(){if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}video.srcObject=null}
+async function startCamera(mode){await stopCamera();facing=mode;stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:mode},width:{ideal:1280,max:1920},height:{ideal:720,max:1080},frameRate:{ideal:30,min:20,max:60}}});video.srcObject=stream;video.classList.toggle('mirror',mode==='user');await video.play()}
+function fitCanvas(c,w,h){c.width=w;c.height=h}
+function captureTo(target,mirror=false){const vw=video.videoWidth||720,vh=video.videoHeight||1280;fitCanvas(target,vw,vh);const g=target.getContext('2d');g.save();if(mirror){g.translate(vw,0);g.scale(-1,1)}g.drawImage(video,0,0,vw,vh);g.restore()}
+function drawCover(g,img,w,h,zoom=1,cx=.5,cy=.5,rot=0){const iw=img.width||img.videoWidth,ih=img.height||img.videoHeight;if(!iw||!ih)return;const base=Math.max(w/iw,h/ih)*zoom,dw=iw*base,dh=ih*base;const x=w*.5-dw*clamp(cx,.08,.92),y=h*.5-dh*clamp(cy,.08,.92);g.save();g.translate(w/2,h/2);g.rotate(rot);g.translate(-w/2,-h/2);g.drawImage(img,x,y,dw,dh);g.restore()}
+async function doCountdown(label=''){countdownEl.style.display='grid';for(const n of [3,2,1]){countdownEl.textContent=n;await new Promise(r=>setTimeout(r,650))}countdownEl.textContent=label||'VIA';await new Promise(r=>setTimeout(r,320));countdownEl.style.display='none'}
+
+function intro(){stage='intro';phaseEl.textContent='MISSIONE';setModal(`<h1>BulletCam Arcade</h1><p>Scatta una foto frontale, inquadra l'ambiente con la fotocamera posteriore e lancia una telecamera virtuale come fosse un proiettile.</p><div class="steps"><div class="step"><b>1</b>Selfie del pilota</div><div class="step"><b>2</b>Scena posteriore</div><div class="step"><b>3</b>Volo guidato</div></div><p>Durante il volo inclina il telefono oppure trascina il dito. Attraversa gli anelli, evita le mine e tieni premuto <b>Guarda dietro</b> per vedere il punto di partenza che si allontana.</p><div class="actions"><button id="begin" class="primary">Inizia missione</button></div><div class="tiny">Effetto arcade 2.5D: la fotocamera reale non lascia fisicamente il telefono.</div>`);$('begin').addEventListener('click',beginSelfie)}
+async function beginSelfie(){try{ensureAudio();if(audioCtx.state==='suspended')await audioCtx.resume();stage='selfie';phaseEl.textContent='SELFIE';hideModal();setStatus('Prepara il volto.','La foto frontale diventerà il punto di partenza visto dal proiettile.');await startCamera('user');setTimeout(showSelfieControls,600)}catch(e){cameraError(e)}}
+function showSelfieControls(){setModal(`<h2>Foto del pilota</h2><p>Guarda la fotocamera. Parte un conto alla rovescia automatico.</p><div class="actions"><button id="snapSelfie" class="primary">Scatta tra 3 secondi</button><button id="cancel">Annulla</button></div>`);$('snapSelfie').addEventListener('click',captureSelfie);$('cancel').addEventListener('click',intro)}
+async function captureSelfie(){hideModal();await doCountdown('');captureTo(selfie,true);flashShot();tone(1100,.08,'square',.08,.65);showSelfieReview()}
+function showSelfieReview(){setModal(`<h2>Ti vedrà così</h2><div class="preview"><canvas id="selfiePreview"></canvas></div><p>Questa immagine verrà lasciata virtualmente al punto di partenza.</p><div class="actions"><button id="redoSelfie">Rifai</button><button id="useSelfie" class="good">Usa questa</button></div>`);const p=$('selfiePreview'),g=p.getContext('2d');p.width=selfie.width;p.height=selfie.height;g.drawImage(selfie,0,0);$('redoSelfie').addEventListener('click',()=>{hideModal();showSelfieControls()});$('useSelfie').addEventListener('click',beginScene)}
+async function beginScene(){try{stage='scene';phaseEl.textContent='AMBIENTE';hideModal();setStatus('Passaggio alla fotocamera posteriore…','Punta verso una stanza, un corridoio o un ambiente ricco di dettagli.');await startCamera('environment');setTimeout(showSceneControls,700)}catch(e){cameraError(e)}}
+function showSceneControls(){setModal(`<h2>Prepara il percorso</h2><p>Punta la fotocamera verso l'ambiente. Cerca profondità, mobili, porte o un corridoio: l'illusione sarà più convincente.</p><div class="actions"><button id="captureScene" class="primary">Acquisisci scena</button><button id="backSelfie">Torna al selfie</button></div>`);$('captureScene').addEventListener('click',captureScene);$('backSelfie').addEventListener('click',beginSelfie)}
+async function captureScene(){hideModal();await doCountdown('FERMO');captureTo(scene,false);flashShot();tone(760,.09,'triangle',.07,.8);await stopCamera();showReady()}
+function showReady(){stage='ready';video.style.display='none';game.style.display='block';resizeGame();drawScenePreview();phaseEl.textContent='ARMATO';setStatus('Scena acquisita.','Il volo durerà circa 22 secondi. Inclina il telefono o trascina sullo schermo.');setModal(`<h2>Proiettile pronto</h2><p>Attraversa gli anelli luminosi e schiva le mine. Più anelli consecutivi prendi, più cresce il moltiplicatore.</p><div class="actions"><button id="launch" class="primary">Spara</button><button id="rescan">Nuova scena</button></div><p class="tiny">Tieni premuto “Guarda dietro” durante il volo per osservare il selfie che si allontana.</p>`);$('launch').addEventListener('click',prepareLaunch);$('rescan').addEventListener('click',beginScene)}
+function resizeGame(){const d=Math.min(2,window.devicePixelRatio||1),w=Math.max(320,innerWidth),h=Math.max(480,innerHeight);game.width=Math.round(w*d);game.height=Math.round(h*d);game.style.width=w+'px';game.style.height=h+'px';ctx.setTransform(d,0,0,d,0,0)}
+function drawScenePreview(){const w=innerWidth,h=innerHeight;ctx.clearRect(0,0,w,h);drawCover(ctx,scene,w,h,1,.5,.5,0);ctx.fillStyle='rgba(3,7,14,.26)';ctx.fillRect(0,0,w,h)}
+async function enableOrientation(){try{if(typeof DeviceOrientationEvent!=='undefined'&&typeof DeviceOrientationEvent.requestPermission==='function'){const r=await DeviceOrientationEvent.requestPermission();orientationReady=r==='granted'}else orientationReady=true}catch(e){orientationReady=false}}
+async function prepareLaunch(){await enableOrientation();oriBase={...ori};hideModal();await doCountdown('SPARA');startFlight()}
+
+function makeObjects(){const arr=[];let z=18;for(let i=0;i<34;i++){z+=rand(4.5,8.5);const mine=Math.random()<.28;arr.push({type:mine?'mine':'ring',x:rand(-4.5,4.5),y:rand(-3.2,3.2),z,size:mine?rand(.42,.68):rand(.9,1.25),spin:rand(-2,2),phase:rand(0,Math.PI*2),done:false})}return arr}
+function startFlight(){stage='flight';phaseEl.textContent='IN VOLO';scoreBadge.style.display=comboBadge.style.display=distanceBadge.style.display='block';reticle.style.display=joystick.style.display=lookBackBtn.style.display='block';$('statusPanel').style.display='none';flight={time:0,distance:0,score:0,combo:1,health:100,speed:42,px:0,py:0,vx:0,vy:0,roll:0,shake:0,objects:makeObjects(),particles:[],hits:0,rings:0,finished:false};lastTime=performance.now();fireSound();if(navigator.vibrate)navigator.vibrate([25,20,50]);cancelAnimationFrame(raf);raf=requestAnimationFrame(loop)}
+function inputVector(){let x=0,y=0;if(pointer.active){x=clamp((pointer.x-pointer.startX)/75,-1,1);y=clamp((pointer.y-pointer.startY)/75,-1,1)}else if(orientationReady){x=clamp((ori.gamma-oriBase.gamma)/22,-1,1);y=clamp((ori.beta-oriBase.beta)/24,-1,1)}return{x,y}}
+function update(dt){const f=flight,inp=inputVector();f.time+=dt;f.distance+=f.speed*dt;f.speed=clamp(f.speed+dt*1.15,42,68);f.vx+=(inp.x*9-f.vx*4.3)*dt;f.vy+=(inp.y*8-f.vy*4.3)*dt;f.px=clamp(f.px+f.vx*dt,-5.1,5.1);f.py=clamp(f.py+f.vy*dt,-3.7,3.7);f.roll=lerp(f.roll,-inp.x*.12,.1);f.shake*=Math.pow(.04,dt);
+  for(const o of f.objects){if(o.done)continue;o.z-=f.speed*dt*.055;o.phase+=o.spin*dt;if(o.z<.8){const dx=o.x-f.px,dy=o.y-f.py,d=Math.hypot(dx,dy);if(o.type==='ring'&&d<o.size*.78){o.done=true;f.rings++;f.score+=Math.round(100*f.combo);f.combo=clamp(f.combo+1,1,8);ringSound(f.combo);showToast(`ANELLO +${Math.round(100*(f.combo-1))}`);spawnBurst(innerWidth/2,innerHeight/2,'good');if(navigator.vibrate)navigator.vibrate(12)}else if(o.type==='mine'&&d<o.size*.82){o.done=true;f.hits++;f.health-=34;f.combo=1;f.shake=18;crashSound();showToast('IMPATTO!');spawnBurst(innerWidth/2,innerHeight/2,'bad');if(navigator.vibrate)navigator.vibrate([45,20,45])}else{o.done=true;if(o.type==='ring')f.combo=Math.max(1,f.combo-1)}}}
+  for(const p of f.particles){p.x+=p.vx*dt;p.y+=p.vy*dt;p.vx*=.985;p.vy*=.985;p.life-=dt}
+  f.particles=f.particles.filter(p=>p.life>0);if(f.health<=0||f.time>=22||f.objects.every(o=>o.done)){finishFlight()}}
+function spawnBurst(x,y,kind){const c=kind==='bad'?'#ff5d7a':'#8dffba';for(let i=0;i<28;i++){const a=Math.random()*Math.PI*2,s=rand(60,260);flight.particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:rand(.35,.85),c})}}
+function drawBackground(w,h){const f=flight,zoom=1.06+Math.min(2.8,f.distance/420),cx=.5+f.px*.018,cy=.5+f.py*.019;ctx.save();ctx.translate(rand(-f.shake,f.shake),rand(-f.shake,f.shake));drawCover(ctx,scene,w,h,zoom,cx,cy,f.roll);const grad=ctx.createRadialGradient(w/2,h/2,20,w/2,h/2,Math.max(w,h)*.72);grad.addColorStop(0,'rgba(0,0,0,0)');grad.addColorStop(1,'rgba(1,4,11,.5)');ctx.fillStyle=grad;ctx.fillRect(0,0,w,h);ctx.restore()}
+function drawSpeedLines(w,h){const f=flight,amount=Math.floor(18+f.speed*.55);ctx.save();ctx.globalCompositeOperation='screen';for(let i=0;i<amount;i++){const a=(i*2.399+f.time*.24)%(Math.PI*2),r0=((i*73+f.time*410)%(Math.max(w,h)*.5)),len=18+f.speed*.55,x=w/2+Math.cos(a)*r0,y=h/2+Math.sin(a)*r0;ctx.strokeStyle=`rgba(170,225,255,${.08+(i%5)*.025})`;ctx.lineWidth=1+(i%3);ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+Math.cos(a)*len,y+Math.sin(a)*len);ctx.stroke()}ctx.restore()}
+function project(o,w,h){const f=flight,focal=Math.min(w,h)*1.06,z=Math.max(.65,o.z);return{x:w/2+(o.x-f.px)*focal/z,y:h/2+(o.y-f.py)*focal/z,r:o.size*focal/z}}
+function drawRing(o,p){const alpha=clamp(1-o.z/90,.2,1),r=Math.max(4,p.r);ctx.save();ctx.translate(p.x,p.y);ctx.rotate(o.phase*.45);ctx.globalAlpha=alpha;ctx.shadowColor='#78ffa5';ctx.shadowBlur=18;ctx.strokeStyle='rgba(150,255,190,.95)';ctx.lineWidth=Math.max(2,r*.13);ctx.beginPath();ctx.ellipse(0,0,r,r*.86,0,0,Math.PI*2);ctx.stroke();ctx.shadowBlur=5;ctx.strokeStyle='rgba(230,255,240,.95)';ctx.lineWidth=Math.max(1,r*.035);ctx.beginPath();ctx.ellipse(0,0,r*.75,r*.64,0,0,Math.PI*2);ctx.stroke();for(let i=0;i<8;i++){const a=i/8*Math.PI*2;ctx.fillStyle='rgba(210,255,225,.8)';ctx.beginPath();ctx.arc(Math.cos(a)*r*.9,Math.sin(a)*r*.77,Math.max(1,r*.045),0,Math.PI*2);ctx.fill()}ctx.restore()}
+function drawMine(o,p){const r=Math.max(4,p.r);ctx.save();ctx.translate(p.x,p.y);ctx.rotate(o.phase);ctx.globalAlpha=clamp(1-o.z/80,.25,1);ctx.shadowColor='#ff5576';ctx.shadowBlur=16;ctx.fillStyle='rgba(120,12,35,.92)';ctx.strokeStyle='rgba(255,110,135,.95)';ctx.lineWidth=Math.max(1.5,r*.09);ctx.beginPath();for(let i=0;i<20;i++){const a=i/20*Math.PI*2,rr=i%2? r*.72:r*1.15;const x=Math.cos(a)*rr,y=Math.sin(a)*rr;i?ctx.lineTo(x,y):ctx.moveTo(x,y)}ctx.closePath();ctx.fill();ctx.stroke();ctx.fillStyle='rgba(255,225,230,.95)';ctx.beginPath();ctx.arc(0,0,r*.18,0,Math.PI*2);ctx.fill();ctx.restore()}
+function drawObjects(w,h){const visible=flight.objects.filter(o=>!o.done&&o.z<95).sort((a,b)=>b.z-a.z);for(const o of visible){const p=project(o,w,h);if(p.x<-p.r*2||p.x>w+p.r*2||p.y<-p.r*2||p.y>h+p.r*2)continue;o.type==='ring'?drawRing(o,p):drawMine(o,p)}}
+function drawParticles(){for(const p of flight.particles){ctx.globalAlpha=clamp(p.life*1.6,0,1);ctx.fillStyle=p.c;ctx.beginPath();ctx.arc(p.x,p.y,2+p.life*3,0,Math.PI*2);ctx.fill()}ctx.globalAlpha=1}
+function drawLookBack(w,h){ctx.save();ctx.fillStyle='#040812';ctx.fillRect(0,0,w,h);const f=flight,scale=clamp(1.15/(1+f.distance/150),.14,1),sw=Math.min(w*.74,420)*scale,sh=sw*(selfie.height/selfie.width);ctx.globalAlpha=.38;drawCover(ctx,scene,w,h,1.25,.5,.5,0);ctx.globalAlpha=1;ctx.translate(w/2,h/2);ctx.shadowColor='rgba(105,210,255,.8)';ctx.shadowBlur=28;ctx.strokeStyle='rgba(180,235,255,.9)';ctx.lineWidth=3;ctx.fillStyle='#07101d';const x=-sw/2,y=-sh/2;ctx.beginPath();roundRect(ctx,x-7,y-7,sw+14,sh+14,20*scale);ctx.fill();ctx.stroke();ctx.save();roundClip(ctx,x,y,sw,sh,16*scale);ctx.drawImage(selfie,x,y,sw,sh);ctx.restore();ctx.fillStyle='rgba(255,255,255,.9)';ctx.font=`800 ${Math.max(12,20*scale)}px system-ui`;ctx.textAlign='center';ctx.fillText('PUNTO DI PARTENZA',0,y+sh+30*scale);ctx.restore()}
+function roundRect(g,x,y,w,h,r){r=Math.min(r,w/2,h/2);g.moveTo(x+r,y);g.arcTo(x+w,y,x+w,y+h,r);g.arcTo(x+w,y+h,x,y+h,r);g.arcTo(x,y+h,x,y,r);g.arcTo(x,y,x+w,y,r);g.closePath()}
+function roundClip(g,x,y,w,h,r){g.beginPath();roundRect(g,x,y,w,h,r);g.clip()}
+function render(){const w=innerWidth,h=innerHeight;ctx.clearRect(0,0,w,h);if(lookBack)drawLookBack(w,h);else{drawBackground(w,h);drawSpeedLines(w,h);drawObjects(w,h);drawParticles()}const f=flight;scoreBadge.textContent=`${f.score} pt`;comboBadge.textContent=`x${f.combo}`;distanceBadge.textContent=`${Math.round(f.distance)} m`;phaseEl.textContent=f.health>33?'IN VOLO':'DANNEGGIATO';phaseEl.style.color=f.health>33?'#9bdcff':'#ff8ca1';const inp=inputVector();stick.style.transform=`translate(${inp.x*34}px,${inp.y*34}px)`}
+function loop(now){if(stage!=='flight'||!flight||flight.finished)return;const dt=Math.min(.035,(now-lastTime)/1000||.016);lastTime=now;update(dt);if(stage==='flight'){render();raf=requestAnimationFrame(loop)}}
+function finishFlight(){if(!flight||flight.finished)return;flight.finished=true;stage='result';cancelAnimationFrame(raf);reticle.style.display=joystick.style.display=lookBackBtn.style.display='none';scoreBadge.style.display=comboBadge.style.display=distanceBadge.style.display='none';$('statusPanel').style.display='block';const f=flight,rank=f.health<=0?'D':f.score>=2200?'S':f.score>=1500?'A':f.score>=900?'B':'C';phaseEl.textContent='MISSIONE FINITA';setStatus('Volo completato.',`${f.rings} anelli attraversati · ${f.hits} impatti · ${Math.round(f.distance)} metri virtuali.`);setModal(`<h2>Risultato della missione</h2><div class="rank">${rank}</div><div class="scoreline">${f.score} punti</div><p>${f.rings} anelli · ${f.hits} impatti · ${Math.round(f.distance)} m</p><div class="actions"><button id="replay" class="primary">Rigioca</button><button id="newScene">Nuova scena</button><button id="newMission">Nuova missione</button></div>`);$('replay').addEventListener('click',prepareLaunch);$('newScene').addEventListener('click',beginScene);$('newMission').addEventListener('click',beginSelfie)}
+function cameraError(e){console.error(e);setModal(`<h2>Fotocamera non disponibile</h2><p>Apri il collegamento direttamente in Chrome e autorizza la fotocamera.</p><div class="actions"><button id="retry" class="primary">Riprova</button></div>`);$('retry').addEventListener('click',intro)}
+
+window.addEventListener('deviceorientation',e=>{if(Number.isFinite(e.beta))ori.beta=e.beta;if(Number.isFinite(e.gamma))ori.gamma=e.gamma},{passive:true});
+window.addEventListener('resize',()=>{resizeGame();if(stage==='ready')drawScenePreview()});
+game.addEventListener('pointerdown',e=>{if(stage!=='flight')return;pointer.active=true;pointer.startX=pointer.x=e.clientX;pointer.startY=pointer.y=e.clientY;game.setPointerCapture(e.pointerId)});
+game.addEventListener('pointermove',e=>{if(!pointer.active)return;pointer.x=e.clientX;pointer.y=e.clientY});
+function endPointer(){pointer.active=false;stick.style.transform='translate(0,0)'}game.addEventListener('pointerup',endPointer);game.addEventListener('pointercancel',endPointer);
+lookBackBtn.addEventListener('pointerdown',e=>{e.preventDefault();lookBack=true});lookBackBtn.addEventListener('pointerup',()=>lookBack=false);lookBackBtn.addEventListener('pointercancel',()=>lookBack=false);lookBackBtn.addEventListener('pointerleave',()=>lookBack=false);
+document.addEventListener('visibilitychange',()=>{if(document.hidden){cancelAnimationFrame(raf);if(stage==='flight')lastTime=performance.now()}else if(stage==='flight')raf=requestAnimationFrame(loop)});
+intro();
+})();
+</script>
+</body>
+</html>
