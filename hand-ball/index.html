@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+  <meta name="theme-color" content="#070b12">
+  <title>Palm Ball Physics</title>
+  <style>
+    :root{color-scheme:dark}
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#070b12;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+    #app{position:fixed;inset:0;background:#070b12}
+    video,canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+    .mirror{transform:scaleX(-1)}
+    #shade{position:absolute;inset:0;pointer-events:none;background:linear-gradient(to bottom,rgba(0,0,0,.52),transparent 30%,transparent 67%,rgba(0,0,0,.7))}
+    #hud{position:absolute;inset:0;pointer-events:none;display:flex;flex-direction:column;justify-content:space-between;padding:calc(env(safe-area-inset-top) + 10px) 10px calc(env(safe-area-inset-bottom) + 10px)}
+    .top,.actions{display:flex;gap:8px;align-items:center;justify-content:space-between}
+    .left{display:flex;gap:7px;flex-wrap:wrap}
+    .badge,.panel{background:rgba(7,12,20,.7);border:1px solid rgba(255,255,255,.14);backdrop-filter:blur(10px);box-shadow:0 8px 28px rgba(0,0,0,.28)}
+    .badge{border-radius:999px;padding:8px 11px;font-size:12px;font-weight:850;letter-spacing:.04em}
+    .ready{color:#9fd4ff}.active{color:#adffc6}.warn{color:#ffd18a}.air{color:#d4c2ff}
+    #bottom{display:flex;flex-direction:column;gap:8px;align-items:center}
+    .panel{width:min(94vw,660px);border-radius:18px;padding:12px 14px;text-align:center}
+    #status{font-size:14px;font-weight:780;line-height:1.35}
+    #detail{color:#b9c8d9;font-size:12px;margin-top:5px}
+    .actions{pointer-events:auto;justify-content:center}
+    button{border:1px solid rgba(255,255,255,.16);border-radius:14px;padding:12px 16px;background:rgba(17,27,42,.94);color:#fff;font:800 14px system-ui;box-shadow:0 8px 24px rgba(0,0,0,.25)}
+    button.primary{background:#1769ff}button.secondary{background:#263246}
+    #startScreen{position:absolute;inset:0;z-index:10;display:grid;place-items:center;padding:20px;background:radial-gradient(circle at 50% 32%,#172640,#070b12 72%)}
+    #card{width:min(94vw,650px);border-radius:24px;padding:24px;text-align:center;background:rgba(7,12,22,.97);border:1px solid #2b3950;box-shadow:0 24px 70px rgba(0,0,0,.45)}
+    h1{margin:0 0 8px;font-size:clamp(25px,7vw,40px)}
+    p{margin:8px 0;color:#c2ccda;line-height:1.45}
+    .gesture{margin:16px auto;padding:14px;border-radius:18px;background:#111a29;border:1px solid #26364d;color:#eaf3ff;font-weight:800}
+    #start{width:100%;margin-top:12px;font-size:17px;padding:15px}
+    #load{min-height:20px;margin-top:10px;color:#9ecaff;font-size:13px}.error{color:#ffb4b4!important}.tiny{font-size:11px;color:#8fa1b5}
+  </style>
+</head>
+<body>
+<div id="app">
+  <video id="video" autoplay playsinline muted class="mirror"></video>
+  <canvas id="view" class="mirror"></canvas>
+  <div id="shade"></div>
+  <div id="hud">
+    <div class="top">
+      <div class="left">
+        <div id="state" class="badge ready">IN ATTESA</div>
+        <div id="contact" class="badge">PALLA —</div>
+      </div>
+      <div id="fps" class="badge">— ms</div>
+    </div>
+    <div id="bottom">
+      <div class="panel">
+        <div id="status">Avvia la fotocamera e mostra il palmo aperto.</div>
+        <div id="detail">La palla compare sopra il palmo e reagisce a gravità, inclinazione, accelerazione e urti.</div>
+      </div>
+      <div class="actions">
+        <button id="reset" class="secondary">Nuova palla</button>
+        <button id="flip">Cambia camera</button>
+      </div>
+    </div>
+  </div>
+  <div id="startScreen">
+    <div id="card">
+      <h1>Palm Ball Physics</h1>
+      <p>Apri la mano con il polso sotto le dita, come se stessi reggendo una palla.</p>
+      <div class="gesture">Palmo aperto verso la fotocamera · dita distese · polso in basso</div>
+      <p>Muovi, inclina o scuoti la mano: la palla rotola, rimbalza e può essere lanciata. Se chiudi la mano, la palla continua in caduta libera.</p>
+      <button id="start" class="primary">Avvia fotocamera</button>
+      <div id="load"></div>
+      <div class="tiny">Elaborazione locale nel browser. Serve HTTPS e il permesso della fotocamera.</div>
+    </div>
+  </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+<script>
+(()=>{'use strict';
+const $=id=>document.getElementById(id);
+const video=$('video'),canvas=$('view'),ctx=canvas.getContext('2d',{alpha:true});
+const stateEl=$('state'),contactEl=$('contact'),statusEl=$('status'),detailEl=$('detail'),fpsEl=$('fps'),loadEl=$('load'),startScreen=$('startScreen');
+const CONNECTIONS=[[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const lerp=(a,b,t)=>a+(b-a)*t;
+const hypot=(x,y)=>Math.hypot(x,y);
+const dot=(a,b)=>a.x*b.x+a.y*b.y;
+const sub=(a,b)=>({x:a.x-b.x,y:a.y-b.y});
+const add=(a,b)=>({x:a.x+b.x,y:a.y+b.y});
+const mul=(a,s)=>({x:a.x*s,y:a.y*s});
+const norm=v=>{const l=Math.max(.0001,hypot(v.x,v.y));return{x:v.x/l,y:v.y/l}};
+let stream=null,running=false,busy=false,lastVideoTime=-1,facing='user',inferenceEma=0,lastTick=performance.now();
+let lm=null,handVisible=false,openFrames=0,closedFrames=0;
+let palm={valid:false,c:{x:0,y:0},prev:{x:0,y:0},v:{x:0,y:0},t:{x:1,y:0},n:{x:0,y:-1},half:70,width:20,angle:0,openness:0};
+let ball={visible:false,x:0,y:0,vx:0,vy:0,r:34,spin:0,omega:0,contact:false,age:0,trail:[]};
+let lastPalmTime=performance.now(),spawnLock=0;
+function setState(text,mode='ready'){stateEl.textContent=text;stateEl.className='badge '+mode}
+function resize(){const w=video.videoWidth||640,h=video.videoHeight||480;if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;ball.r=clamp(Math.min(w,h)*.064,24,48)}}
+function p(i){return{x:lm[i].x*canvas.width,y:lm[i].y*canvas.height,z:lm[i].z||0}}
+function angle(a,b,c){const u=sub(a,b),v=sub(c,b);return Math.acos(clamp(dot(u,v)/(Math.max(.001,hypot(u.x,u.y)*hypot(v.x,v.y))),-1,1))*180/Math.PI}
+function fingerOpen(mcp,pip,dip,tip){const a=p(mcp),b=p(pip),c=p(dip),d=p(tip),w=p(0);return angle(a,b,c)>148&&angle(b,c,d)>145&&hypot(d.x-w.x,d.y-w.y)>hypot(b.x-w.x,b.y-w.y)*1.15}
+function analyseHand(now){if(!lm){handVisible=false;palm.valid=false;openFrames=0;closedFrames++;return}
+  handVisible=true;
+  const w=p(0),i=p(5),m=p(9),q=p(17);
+  const opens=[fingerOpen(5,6,7,8),fingerOpen(9,10,11,12),fingerOpen(13,14,15,16),fingerOpen(17,18,19,20)];
+  const openness=opens.filter(Boolean).length;
+  const wristBelow=m.y<w.y-Math.max(8,hypot(m.x-w.x,m.y-w.y)*.12);
+  const wide=hypot(i.x-q.x,i.y-q.y)>hypot(w.x-m.x,w.y-m.y)*.48;
+  const valid=openness>=3&&wristBelow&&wide;
+  if(valid){openFrames++;closedFrames=0}else{openFrames=0;closedFrames++}
+  const across=norm(sub(q,i));
+  let up=norm(sub(m,w));
+  if(up.y>0)up=mul(up,-1);
+  const c={x:(i.x+q.x+m.x)/3,y:(i.y+q.y+m.y)/3};
+  const dt=clamp((now-lastPalmTime)/1000,.008,.08);lastPalmTime=now;
+  if(!palm.prev.x&&!palm.prev.y)palm.prev={...c};
+  const rawV={x:(c.x-palm.prev.x)/dt,y:(c.y-palm.prev.y)/dt};
+  palm.v.x=lerp(palm.v.x,rawV.x,.36);palm.v.y=lerp(palm.v.y,rawV.y,.36);
+  palm.prev={...c};
+  palm.c.x=lerp(palm.c.x||c.x,c.x,.48);palm.c.y=lerp(palm.c.y||c.y,c.y,.48);
+  palm.t={...across};palm.n={...up};palm.half=lerp(palm.half,hypot(i.x-q.x,i.y-q.y)*.66,.35);palm.width=clamp(palm.half*.18,12,28);palm.angle=Math.atan2(across.y,across.x);palm.openness=openness;palm.valid=valid;
+  if(valid&&openFrames>=3&&!ball.visible&&now>spawnLock)spawnBall();
+}
+function spawnBall(){const lift=ball.r+palm.width*.55;ball.visible=true;ball.x=palm.c.x+palm.n.x*lift;ball.y=palm.c.y+palm.n.y*lift;ball.vx=palm.v.x*.2;ball.vy=palm.v.y*.2;ball.spin=0;ball.omega=0;ball.contact=true;ball.age=0;ball.trail=[];setState('PALLA CREATA','active');contactEl.textContent='SUL PALMO';contactEl.className='badge active'}
+function resetBall(){ball.visible=false;ball.trail=[];spawnLock=performance.now()+250;contactEl.textContent='PALLA —';contactEl.className='badge';statusEl.textContent='Apri il palmo per creare una nuova palla.'}
+function collidePalm(dt){ball.contact=false;if(!palm.valid||closedFrames>2)return;
+  const rel={x:ball.x-palm.c.x,y:ball.y-palm.c.y};
+  let u=dot(rel,palm.t),v=dot(rel,palm.n);
+  const limit=palm.half+ball.r*.38;
+  if(Math.abs(u)>limit||v>ball.r+palm.width||v<-ball.r*.9)return;
+  const rv={x:ball.vx-palm.v.x,y:ball.vy-palm.v.y};
+  let vn=dot(rv,palm.n),vt=dot(rv,palm.t);
+  if(vn<220||v<ball.r*.96){
+    const edgeSoft=clamp((limit-Math.abs(u))/(ball.r*.65),0,1);
+    const target=ball.r+palm.width*.36;
+    ball.x=palm.c.x+palm.t.x*u+palm.n.x*target;
+    ball.y=palm.c.y+palm.t.y*u+palm.n.y*target;
+    if(vn<0)vn=-vn*(.16+.12*(1-edgeSoft));
+    vt*=.72;
+    const surfacePush=dot(palm.v,palm.n);
+    ball.vx=palm.v.x+palm.n.x*vn+palm.t.x*vt;
+    ball.vy=palm.v.y+palm.n.y*vn+palm.t.y*vt;
+    if(surfacePush<-420){ball.vx+=palm.n.x*(-surfacePush)*.42;ball.vy+=palm.n.y*(-surfacePush)*.42}
+    const gravityAlong=dot({x:0,y:1380},palm.t);
+    ball.vx+=palm.t.x*gravityAlong*dt*.78;ball.vy+=palm.t.y*gravityAlong*dt*.78;
+    ball.omega=lerp(ball.omega,vt/Math.max(1,ball.r),.18);
+    ball.contact=true;
+  }
+}
+function stepBall(dt){if(!ball.visible)return;
+  ball.age+=dt;
+  ball.vy+=1380*dt;
+  ball.vx*=Math.pow(.997,dt*60);ball.vy*=Math.pow(.999,dt*60);
+  ball.x+=ball.vx*dt;ball.y+=ball.vy*dt;ball.spin+=ball.omega*dt;
+  collidePalm(dt);
+  const r=ball.r,w=canvas.width,h=canvas.height;
+  if(ball.x<r){ball.x=r;ball.vx=Math.abs(ball.vx)*.68;ball.omega+=ball.vy*.002}
+  if(ball.x>w-r){ball.x=w-r;ball.vx=-Math.abs(ball.vx)*.68;ball.omega-=ball.vy*.002}
+  if(ball.y<r){ball.y=r;ball.vy=Math.abs(ball.vy)*.62}
+  if(ball.y>h-r){ball.y=h-r;ball.vy=-Math.abs(ball.vy)*.58;ball.vx*=.88;ball.omega=ball.vx/r}
+  if(hypot(ball.vx,ball.vy)>70&&ball.age>.08){ball.trail.push({x:ball.x,y:ball.y,a:1});if(ball.trail.length>12)ball.trail.shift()}
+  for(const t of ball.trail)t.a*=.88;
+  if(ball.contact){contactEl.textContent='SUL PALMO';contactEl.className='badge active';setState('IN EQUILIBRIO','active')}
+  else{contactEl.textContent='IN VOLO';contactEl.className='badge air';if(ball.visible)setState('PALLA LIBERA','air')}
+}
+function drawHand(){if(!lm)return;ctx.save();ctx.lineCap='round';ctx.lineJoin='round';ctx.strokeStyle=palm.valid?'rgba(122,255,173,.95)':'rgba(93,178,255,.82)';ctx.lineWidth=Math.max(2.5,canvas.width/260);ctx.shadowColor='rgba(70,150,255,.55)';ctx.shadowBlur=7;for(const [a,b] of CONNECTIONS){const A=p(a),B=p(b);ctx.beginPath();ctx.moveTo(A.x,A.y);ctx.lineTo(B.x,B.y);ctx.stroke()}ctx.shadowBlur=0;for(let i=0;i<21;i++){const A=p(i);ctx.fillStyle=i===0?'#ffd38b':'rgba(247,251,255,.96)';ctx.beginPath();ctx.arc(A.x,A.y,Math.max(2.3,canvas.width/380),0,Math.PI*2);ctx.fill()}if(palm.valid){const a=add(palm.c,mul(palm.t,-palm.half)),b=add(palm.c,mul(palm.t,palm.half));ctx.strokeStyle='rgba(120,255,179,.68)';ctx.lineWidth=palm.width;ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke()}ctx.restore()}
+function drawBall(){if(!ball.visible)return;for(const t of ball.trail){ctx.save();ctx.globalAlpha=t.a*.18;const g=ctx.createRadialGradient(t.x-ball.r*.25,t.y-ball.r*.3,1,t.x,t.y,ball.r*.85);g.addColorStop(0,'rgba(180,225,255,.8)');g.addColorStop(1,'rgba(70,105,180,0)');ctx.fillStyle=g;ctx.beginPath();ctx.arc(t.x,t.y,ball.r*.85,0,Math.PI*2);ctx.fill();ctx.restore()}
+  const shadowY=ball.contact?ball.y+ball.r*.72:Math.min(canvas.height-ball.r*.3,ball.y+ball.r*1.15);ctx.save();ctx.globalAlpha=ball.contact?.34:.18;ctx.fillStyle='#000';ctx.beginPath();ctx.ellipse(ball.x,shadowY,ball.r*(ball.contact?.72:.5),ball.r*.18,0,0,Math.PI*2);ctx.fill();ctx.restore();
+  ctx.save();ctx.translate(ball.x,ball.y);ctx.rotate(ball.spin);ctx.shadowColor='rgba(82,170,255,.8)';ctx.shadowBlur=18;const g=ctx.createRadialGradient(-ball.r*.34,-ball.r*.4,ball.r*.08,0,0,ball.r);g.addColorStop(0,'#f6fbff');g.addColorStop(.18,'#8cd5ff');g.addColorStop(.55,'#377bd8');g.addColorStop(1,'#102b63');ctx.fillStyle=g;ctx.beginPath();ctx.arc(0,0,ball.r,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;ctx.strokeStyle='rgba(255,255,255,.36)';ctx.lineWidth=Math.max(1.2,ball.r*.055);ctx.beginPath();ctx.arc(0,0,ball.r*.72,-1.15,1.65);ctx.stroke();ctx.strokeStyle='rgba(6,27,72,.45)';ctx.beginPath();ctx.arc(0,0,ball.r*.58,1.9,5.1);ctx.stroke();ctx.restore()}
+function render(now){resize();const dt=clamp((now-lastTick)/1000,.001,.033);lastTick=now;ctx.clearRect(0,0,canvas.width,canvas.height);stepBall(dt);drawHand();drawBall();if(!handVisible){setState(ball.visible?'MANO NON VISIBILE':'CERCA LA MANO','warn');statusEl.textContent=ball.visible?'La palla continua con la propria inerzia.':'Mostra il palmo aperto davanti alla fotocamera.';detailEl.textContent='Tieni il polso sotto le dita e lascia il palmo ben visibile.'}else if(palm.valid){statusEl.textContent='Muovi o inclina la mano per controllare la palla.';detailEl.textContent=`Palmo aperto · velocità mano ${Math.round(hypot(palm.v.x,palm.v.y))} px/s · ${ball.contact?'contatto attivo':'palla libera'}`}else{statusEl.textContent=ball.visible?'Palmo non valido: la palla è libera.':'Apri bene la mano con il polso sotto le dita.';detailEl.textContent='Servono almeno tre dita distese e il palmo rivolto verso la fotocamera.'}requestAnimationFrame(render)}
+const hands=new Hands({locateFile:file=>`https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
+hands.setOptions({maxNumHands:1,modelComplexity:0,minDetectionConfidence:.58,minTrackingConfidence:.55});
+hands.onResults(res=>{const end=performance.now();if(window.__startMP){const t=end-window.__startMP;inferenceEma=inferenceEma?inferenceEma*.82+t*.18:t;fpsEl.textContent=Math.round(inferenceEma)+' ms'}lm=res.multiHandLandmarks?.[0]||null;analyseHand(end);busy=false});
+function schedule(){if(!running)return;if('requestVideoFrameCallback'in HTMLVideoElement.prototype)video.requestVideoFrameCallback(sendFrame);else requestAnimationFrame(sendFrame)}
+async function sendFrame(){if(!running)return;if(video.readyState>=2&&!busy&&video.currentTime!==lastVideoTime){busy=true;lastVideoTime=video.currentTime;window.__startMP=performance.now();try{await hands.send({image:video})}catch(e){console.error(e);busy=false}}schedule()}
+async function startCamera(){if(stream)stream.getTracks().forEach(t=>t.stop());loadEl.textContent='Richiesta fotocamera…';stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:facing},width:{ideal:640,max:960},height:{ideal:480,max:720},frameRate:{ideal:30,min:20,max:60}}});video.srcObject=stream;await video.play();const mirrored=facing==='user';video.classList.toggle('mirror',mirrored);canvas.classList.toggle('mirror',mirrored);resize();running=true;startScreen.style.display='none';setState('CERCA IL PALMO','ready');statusEl.textContent='Apri la mano come per reggere una palla.';detailEl.textContent='Quando il gesto è stabile, la palla compare automaticamente.';schedule()}
+$('start').addEventListener('click',async()=>{try{$('start').disabled=true;await startCamera()}catch(e){console.error(e);$('start').disabled=false;loadEl.className='error';loadEl.textContent='Fotocamera non disponibile. Apri il link direttamente in Chrome e autorizza la fotocamera.'}});
+$('reset').addEventListener('click',resetBall);
+$('flip').addEventListener('click',async()=>{facing=facing==='user'?'environment':'user';running=false;busy=false;lastVideoTime=-1;resetBall();try{await startCamera()}catch(e){console.error(e);statusEl.textContent='Impossibile cambiare fotocamera.'}});
+document.addEventListener('visibilitychange',()=>{if(document.hidden){running=false;if(stream)stream.getTracks().forEach(t=>t.stop())}});
+requestAnimationFrame(render);
+})();
+</script>
+</body>
+</html>
